@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+cdk.out/
+*.log
+npm-debug.log*
+.DS_Store
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.vscode/*
+!.vscode/extensions.json

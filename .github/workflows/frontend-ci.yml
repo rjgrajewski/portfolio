@@ -1,0 +1,25 @@
+name: frontend-ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  typecheck-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck --workspace=frontend
+      - run: npm run lint --workspace=frontend
+
+      # Deploy stays manual (Amplify Hosting builds on push to dev/main
+      # directly) — this workflow only gates code quality.

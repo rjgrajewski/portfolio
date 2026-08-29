@@ -1,0 +1,25 @@
+name: backend-ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  cdk-synth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # cdk synth only — no AWS credentials needed (env is a fixed
+      # account/region in backend/infra/lib/config.ts, no context lookups).
+      # Deploy stays manual (docs/ARCHITECTURE.md § Dev / prod separation) —
+      # infra changes are always deliberate, never pushed automatically.
+      - run: npm run synth --workspace=backend/infra
