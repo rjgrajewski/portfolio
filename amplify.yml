@@ -1,22 +1,19 @@
 version: 1
-# Frontend only — see docs/ARCHITECTURE.md § Hosting. This is a static SPA
-# built inside an npm-workspaces monorepo, so preBuild/build run from the
-# repo root (where the workspaces + lockfile live) even though appRoot below
-# points Amplify's artifact/cache resolution at frontend/.
-applications:
-  - appRoot: frontend
-    frontend:
-      phases:
-        preBuild:
-          commands:
-            - cd .. && npm ci
-        build:
-          commands:
-            - cd .. && npm run build --workspace=frontend
-      artifacts:
-        baseDirectory: dist
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - ../node_modules/**/*
+# Frontend only — see docs/ARCHITECTURE.md § Hosting. Static SPA inside an
+# npm-workspaces monorepo: everything runs from the repo root, where the
+# workspaces and lockfile live, and the artifact path points into frontend/.
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - npm run build --workspace=frontend
+  artifacts:
+    baseDirectory: frontend/dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
