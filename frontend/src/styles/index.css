@@ -36,3 +36,67 @@
     }
   }
 }
+
+@layer components {
+  /*
+   * Desktop two-zone layout (docs/ARCHITECTURE.md § Product shape / §
+   * Frontend). A plain CSS Grid switch, not a second DOM tree: below
+   * 1024px this is inert (normal block flow, page scrolls as one column,
+   * unchanged from Phase 1). At 1024px+ it becomes a 3-row grid — header,
+   * a compact intro strip, then a fixed-height row holding the two
+   * independently-scrolling zones — and the whole page stops scrolling as
+   * a unit.
+   *
+   * grid-area placement is deliberately decoupled from DOM order: the
+   * agent zone markup comes BEFORE the content zone in the tree (so the
+   * mobile stacking order — intro, agent teaser, portfolio sections —
+   * matches Phase 1 exactly), while on desktop grid-template-areas puts
+   * content on the left and the agent zone on the right. Source order for
+   * keyboard/screen-reader users stays the sensible one on both
+   * breakpoints; only the desktop *visual* position is reassigned.
+   *
+   * 1024px matches Tailwind's `lg:` breakpoint used everywhere else in
+   * these components (e.g. the mobile-only "Browse manually" button) —
+   * one breakpoint value, so nothing can flip out of sync at the edge.
+   */
+  .app-layout {
+    display: block;
+  }
+
+  @media (min-width: 1024px) {
+    .app-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      grid-template-areas:
+        "header header"
+        "intro  intro"
+        "content agent";
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    .app-layout > .layout-header {
+      grid-area: header;
+    }
+
+    .app-layout > .layout-intro {
+      grid-area: intro;
+    }
+
+    .app-layout > .layout-agent {
+      grid-area: agent;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+    }
+
+    .app-layout > .layout-content {
+      grid-area: content;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+    }
+  }
+}

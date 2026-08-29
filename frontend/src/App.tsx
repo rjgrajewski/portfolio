@@ -1,21 +1,22 @@
 import { Header } from "./components/layout/Header";
-import { Hero } from "./components/layout/Hero";
-import { Footer } from "./components/layout/Footer";
-import { PortfolioSections } from "./components/portfolio/PortfolioSections";
+import { Intro } from "./components/layout/Intro";
+import { AgentZone } from "./components/layout/AgentZone";
+import { ContentZone } from "./components/layout/ContentZone";
 
-// Phase 1 (docs/ROADMAP.md § Phase 1): the manual portfolio + CV download —
-// a complete, real alternative for recruiters who never touch the AI.
-// The agent panel (Phase 2/4) lands inside the AgentEntryTeaser's slot in
-// Hero.tsx; nothing here changes shape when that happens.
+// Two-zone desktop layout (docs/ARCHITECTURE.md § Product shape / §
+// Frontend), mobile unchanged from Phase 1. The `.app-layout` grid in
+// styles/index.css does the actual layout switch at 1024px — this file
+// only decides DOM order, which is deliberately the mobile stacking
+// order (Header, Intro, AgentZone, ContentZone). At `lg:`,
+// grid-template-areas repositions AgentZone to the right and ContentZone
+// to the left without touching this order — see DECISIONS.md for why.
 export default function App() {
   return (
-    <div className="min-h-screen">
+    <div className="app-layout min-h-screen lg:min-h-0">
       <Header />
-      <main>
-        <Hero />
-        <PortfolioSections />
-      </main>
-      <Footer />
+      <Intro />
+      <AgentZone />
+      <ContentZone />
     </div>
   );
 }
