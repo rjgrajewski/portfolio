@@ -560,11 +560,12 @@ portfolio/
 │   │   ├── package.json
 │   │   ├── bin/app.ts
 │   │   ├── lib/
-│   │   │   ├── config.ts               # per-env (dev/prod) parameters
-│   │   │   ├── api-stack.ts            # empty Phase 0 skeleton — Function URL (response streaming),
-│   │   │   │                           #   CORS, in-function throttling land in Phase 2 with the Lambda
-│   │   │   ├── agent-stack.ts          # NOT YET CREATED — reasoning Lambda, DynamoDB tables, content
-│   │   │   │                           #   bucket; Phase 2, once backend/functions/agent/ exists
+│   │   │   ├── config.ts               # per-env (dev/prod) parameters — model id, breaker &
+│   │   │   │                           #   session-cap thresholds, CORS origins, content bucket name
+│   │   │   ├── api-stack.ts            # Phase 2: reasoning Lambda + streaming Function URL (CORS,
+│   │   │   │                           #   in-function throttle) + the 3 DynamoDB tables + content
+│   │   │   │                           #   bucket. `agent-stack.ts` (below) was folded in here for
+│   │   │   │                           #   Phase 2 — one deploy unit; split out later if it grows.
 │   │   │   ├── identity-stack.ts       # NOT YET CREATED — Cognito Identity Pool + scoped guest role;
 │   │   │   │                           #   Phase 4, only after OQ-8 is resolved (see § Open questions)
 │   │   │   └── guardrails-stack.ts     # empty skeleton — the AWS Budgets AND the SNS topic already
@@ -572,18 +573,21 @@ portfolio/
 │   │   │                               #   (see § Abuse protection and cost control)
 │   │   ├── cdk.json
 │   │   └── tsconfig.json
-│   └── functions/                      # NOT YET CREATED — Phase 2
-│       ├── agent/                      # the reasoning endpoint
+│   └── functions/
+│       ├── agent/                      # the reasoning endpoint (Phase 2)
 │       │   ├── src/
-│       │   │   ├── handler.ts          # request → Bedrock (Haiku 4.5), streaming response
+│       │   │   ├── handler.ts          # request → Bedrock (Haiku 4.5) ConverseStream, NDJSON out;
+│       │   │   │                       #   token bucket → breaker → session cap, then the model loop
 │       │   │   ├── systemPrompt.ts     # persona + guardrails + always-loaded core + manifest
 │       │   │   ├── tools.ts            # get_content(topic, layer), reveal_section(sectionId)
-│       │   │   ├── contentStore.ts     # fetch topic files from S3 (or bundled for earliest MVP)
+│       │   │   ├── contentStore.ts     # bundled files by default; S3 GetObject when CONTENT_BUCKET set
 │       │   │   ├── sessionCap.ts       # per-session message cap (sessions table)
 │       │   │   ├── breaker.ts          # real-time daily circuit-breaker (usage-counters table)
-│       │   │   └── log.ts              # conversation content + timestamp, no identity
-│       │   ├── package.json
-│       │   └── tests/
+│       │   │   ├── throttle.ts         # in-container token bucket (Function URL has no built-in)
+│       │   │   ├── log.ts              # conversation content + timestamp, no identity
+│       │   │   ├── ddb.ts / types.ts / awslambda.d.ts   # shared client, wire types, stream global
+│       │   ├── package.json            # @aws-sdk/* are devDependencies — externalised at bundle time
+│       │   └── tsconfig.json
 │       └── credentials/                # OPTIONAL — vends scoped short-lived creds if browser-direct
 │           │                           #            Cognito access proves too permissive
 │           └── src/handler.ts
@@ -624,14 +628,13 @@ portfolio/
 
 ## Open questions / risks to resolve during the build
 
-**OQ numbers are stable and never renumbered or reused.** A resolved question is removed from this list and its number retires with it — it is not reassigned to whatever question happens to be next, so references elsewhere never silently start pointing at a different question. Numbers are written as explicit `OQ-N` labels rather than relying on markdown's auto-numbering, specifically so a retired number leaves a visible gap instead of the list silently closing up. Each open item has an owning roadmap phase. **OQ-1 is the most urgent — it sits underneath Phase 2 and the whole "reveal + answer land simultaneously" demo beat, and should be resolved before `handler.ts` is written, not discovered while writing it.**
+**OQ numbers are stable and never renumbered or reused.** A resolved question is removed from this list and its number retires with it — it is not reassigned to whatever question happens to be next, so references elsewhere never silently start pointing at a different question. Numbers are written as explicit `OQ-N` labels rather than relying on markdown's auto-numbering, specifically so a retired number leaves a visible gap instead of the list silently closing up. Each open item has an owning roadmap phase.
 
-**Retired:** `OQ-2` (Bedrock model access in `eu-central-1`) — resolved 2026-08-29, see [§ Region](#region) and [§ Reasoning](#reasoning--amazon-bedrock-claude-haiku-45). Removed from the list below; the number stays retired, not reused.
+**Retired:**
 
-- **OQ-1 — Tool-use sequencing vs. streaming, and the Lambda→browser wire format.** In Anthropic's tool-use protocol, a `tool_use` block **ends the assistant's turn** (`stop_reason: tool_use`) — the model does not also hand back a finished prose answer in that same response. To get the actual answer after a tool result (e.g. after `get_content` or alongside `reveal_section`), the Lambda must send the tool result back and make a **second model call**. Naively, this risks the exact failure mode [Agentic UI pattern](#agentic-ui-pattern) promises to avoid: reveal fires, then dead air, then the answer arrives from the second pass.
-   **Approach adopted:** `reveal_section` stays a genuine tool call (it has real demonstration value as a function-calling example) — a two-model-call-per-turn cost is accepted for now. **To verify in Phase 2:** whether Claude Haiku 4.5 on Bedrock will emit `get_content` and `reveal_section` **in the same turn, in parallel**, when a question needs both a depth-fetch and a reveal — if so, a "goes deep" turn costs 2 model calls, not 3 (fetch+reveal, then answer). Also worth keeping in mind: the model can emit prose **before** a `tool_use` block within one response, so a reveal does not necessarily mean silence — the first call's leading text can carry spoken content while the tool call is still in flight.
-   **Plan B if voice-path latency doesn't tolerate two calls:** demote `reveal_section` from a real tool to a **structural marker embedded in the streamed text** (e.g. an inline tag the Lambda/frontend parses out of the token stream), so the reveal rides the single main generation instead of a second call.
-   **Also open:** the exact Lambda→browser stream format is undefined. Proposal: **NDJSON**, one JSON object per line, `{type: "text" | "action" | "done", ...}` — text deltas, UI actions (`reveal_section` payloads), and a terminal marker, all on one response-streaming connection. Needs to be settled before `handler.ts` and `transport.ts` are written, since both are built against it. — *Phase 2*
+- `OQ-1` (tool-use sequencing vs. streaming, and the Lambda→browser wire format) — resolved in Phase 2. The wire format is the **NDJSON `{text|action|done|error}` contract** now recorded in [DECISIONS.md](DECISIONS.md) (2026-08-30) and implemented in `backend/functions/agent/src/types.ts` + `frontend/src/agent/transport.ts`: one connection per user turn, `reveal_section` sent as an `action` frame the instant the model emits it, exactly one terminal frame (`done` XOR `error`), `get_content` never in the stream, unknown frame types ignored. `reveal_section` stays a genuine tool call (two model calls per "goes deep" turn accepted). The Phase 2 verification question — can Haiku 4.5 on Bedrock emit `get_content` + `reveal_section` in the same turn — is **answered yes**: `scripts/verify-parallel-tools.ts` got both tools in one turn 6/6 runs (temperature 0), with no leading prose. A "goes deep" turn is therefore **2 model calls, not 3**. Plan B (demote `reveal_section` to an inline text marker) was not needed. The number stays retired, not reused.
+- `OQ-2` (Bedrock model access in `eu-central-1`) — resolved 2026-08-29, see [§ Region](#region) and [§ Reasoning](#reasoning--amazon-bedrock-claude-haiku-45). The number stays retired, not reused.
+
 - **OQ-3 — Real-time media transport.** Validate the [browser-direct-to-Polly/Transcribe via Cognito](#real-time-media-transport) plan end to end, including whether it's acceptable from a cost/abuse standpoint, before committing. Confirm plan B (API Gateway WebSocket proxy) is a viable fallback if not. — *Phase 4 (spike earlier)*
 - **OQ-4 — Polly generative bidirectional streaming.** Does the bidirectional streaming API exist in a usable form, which engine/voices does it support, and is it reachable from the browser SDK with Cognito creds? If not, confirm the sentence-chunked `SynthesizeSpeech` fallback meets the latency bar. — *Phase 4*
 - **OQ-5 — Transcribe streaming automatic language ID for Polish.** Does it now cover `pl-PL` for the streaming path? (The explicit EN/PL toggle stays regardless — it's needed for voice selection.) — *Phase 5*

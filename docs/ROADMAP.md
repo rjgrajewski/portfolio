@@ -12,7 +12,7 @@ The core flow must work; it need not be polished. Concretely, by Tuesday:
 
 - [ ] Phase 0 complete (budget alarm live, region verified, dev/prod split real)
 - [ ] Phase 1 complete (landing + manual click-through + CV download all work — this is the non-AI fallback)
-- [ ] Phase 2 complete (agent answers questions in **text**, with real-but-minimal content)
+- [x] Phase 2 complete (agent answers questions in **text**, with real-but-minimal content) — deployed to dev, verified on the Amplify staging URL
 - [ ] Phase 3 complete (agent answer reveals the matching section, simultaneously)
 - [ ] Phase 8 at least **seeded with real content** for the flagship topics (FlowJob, Rhymind, Amazon, education) — full authoring can continue after
 - [ ] Phase 6 fallbacks for the paths in the demo (Bedrock down → manual portfolio; slow → loading state)
@@ -56,20 +56,20 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 ## Phase 2 — Agent MVP (text only)
 
-- [ ] `content/core/core.md` + `content/manifest.json` with seed content
-- [ ] `content/topics/*.md` — minimal but real seed files for flagship topics
-- [ ] Reasoning Lambda: assemble system prompt (persona + guardrails + core + manifest) → history → user turn; call Bedrock Haiku 4.5 **streaming**
-- [ ] `get_content(topic, layer)` tool — fetch from bundled files first, S3 next
-- [ ] Resolve **OQ-1** (tool-use sequencing vs. streaming, and the Lambda→browser wire format) — settle the NDJSON `{text|action|done}` shape and the two-model-call approach *before* writing `handler.ts`
-- [ ] Reasoning transport: **Lambda Function URL with response streaming** (decided 2026-08-29 — see [ARCHITECTURE.md § Real-time media transport](ARCHITECTURE.md#real-time-media-transport)); wire in-function throttling accordingly (no API Gateway throttling available on a Function URL)
-- [ ] `sessions` + `usage-counters` + `conversation-logs` DynamoDB tables (dev)
-- [ ] **Per-session message cap** enforced server-side
-- [ ] **Real-time daily circuit-breaker** — counter check at invocation start
-- [ ] **Conversation logging** — content + timestamp, no identity
-- [ ] Frontend agent panel: text input, streamed transcript, thinking/loading state
-- [ ] `scripts/sync-content.ts` — push `content/` to the dev S3 prefix
+- [x] `content/core/core.md` + `content/manifest.json` with seed content
+- [x] `content/topics/*.md` — minimal but real seed files for flagship topics (education / amazon / flowjob / rhymind × business + technical)
+- [x] Reasoning Lambda: assemble system prompt (persona + guardrails + core + manifest) → history → user turn; call Bedrock Haiku 4.5 **streaming** (`backend/functions/agent/`)
+- [x] `get_content(topic, layer)` tool — fetch from bundled files first, S3 next (`contentStore.ts`; S3 seam is a `CONTENT_BUCKET` env var away)
+- [x] Resolve **OQ-1** (tool-use sequencing vs. streaming, and the Lambda→browser wire format) — NDJSON `{text|action|done|error}` contract settled, two-model-call approach adopted; **parallel tool use confirmed** for Haiku 4.5 on Bedrock (`scripts/verify-parallel-tools.ts`, 6/6) so a "goes deep" turn is 2 model calls, not 3. Recorded in [DECISIONS.md](DECISIONS.md); OQ-1 retired from [ARCHITECTURE.md](ARCHITECTURE.md).
+- [x] Reasoning transport: **Lambda Function URL with response streaming** (`api-stack.ts` — `InvokeMode: RESPONSE_STREAM`, CORS on the Function URL, in-function token-bucket throttle in `throttle.ts`)
+- [x] `sessions` + `usage-counters` + `conversation-logs` DynamoDB tables (dev) — on-demand, TTL, `RemovalPolicy.DESTROY`; content + timestamp only, zero identifiers
+- [x] **Per-session message cap** enforced server-side (`sessionCap.ts`, per-env `sessionMessageCap` in `config.ts`)
+- [x] **Real-time daily circuit-breaker** — atomic daily counter checked at invocation start (`breaker.ts`, per-env `dailyCircuitBreakerThreshold`)
+- [x] **Conversation logging** — content + timestamp, no identity (`log.ts`)
+- [x] Frontend agent panel: text input, streamed transcript, thinking/loading state (`components/agent/`, `agent/useConversation.ts`, `agent/transport.ts`; `reveal_section` routed through the existing `revealSection` in `activeSectionStore.ts`)
+- [x] `scripts/sync-content.ts` — push `content/` to the dev S3 prefix (`npm run content:sync -- --env dev`)
 
-**Exit:** ask a question in text, get a concise, on-persona, streamed answer grounded in the seed corpus; spend is capped and logged.
+**Exit:** ask a question in text, get a concise, on-persona, streamed answer grounded in the seed corpus; spend is capped and logged. **Met** — `portfolio-api-dev` deployed to `eu-central-1`, verified live on the dev Amplify staging URL (scope boundary, sensitive-question redirect, injection resistance, multi-turn history, and simultaneous section reveal all confirmed against the deployed stack).
 
 ---
 

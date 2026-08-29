@@ -18,8 +18,15 @@ jobs:
 
       - run: npm ci
 
-      # cdk synth only — no AWS credentials needed (env is a fixed
-      # account/region in backend/infra/lib/config.ts, no context lookups).
-      # Deploy stays manual (docs/ARCHITECTURE.md § Dev / prod separation) —
-      # infra changes are always deliberate, never pushed automatically.
+      # Type-check the reasoning Lambda. esbuild (via cdk synth below) strips
+      # types without checking them, so this is the only gate on the
+      # function's type correctness.
+      - run: npm run typecheck --workspace=@portfolio/agent-fn
+
+      # cdk synth — no AWS credentials needed (env is a fixed account/region
+      # in backend/infra/lib/config.ts, no context lookups). This also runs
+      # the NodejsFunction esbuild bundle + the content copy hook, so it
+      # catches a broken bundle too. Deploy stays manual
+      # (docs/ARCHITECTURE.md § Dev / prod separation) — infra changes are
+      # always deliberate, never pushed automatically.
       - run: npm run synth --workspace=backend/infra

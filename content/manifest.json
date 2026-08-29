@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "note": "Table of contents the agent sees (docs/ARCHITECTURE.md § Knowledge / content retrieval). For each topic: the layers available via get_content and a one-line summary of each. SEED CONTENT — Phase 2; full manifest with every topic/layer is Phase 8. 'sectionId' is the matching reveal_section target for that topic.",
+  "topics": [
+    {
+      "id": "education",
+      "title": "Education",
+      "sectionId": "education",
+      "layers": {
+        "business": "Degree, institution, and what it was actually for.",
+        "technical": "The fundamentals from it that still shape how Rafal builds."
+      }
+    },
+    {
+      "id": "amazon",
+      "title": "Amazon",
+      "sectionId": "amazon",
+      "layers": {
+        "business": "What Rafal owned at Amazon and why it mattered to the business.",
+        "technical": "The stack, the scale and on-call constraints, and how he operated it."
+      }
+    },
+    {
+      "id": "flowjob",
+      "title": "FlowJob",
+      "sectionId": "flowjob",
+      "layers": {
+        "business": "The problem FlowJob solves and the value of the AI-assisted flow.",
+        "technical": "The Bedrock reasoning design and the serverless architecture around it."
+      }
+    },
+    {
+      "id": "rhymind",
+      "title": "Rhymind",
+      "sectionId": "rhymind",
+      "layers": {
+        "business": "What Rhymind is, who it is for, and why Rafal built it.",
+        "technical": "The AWS-native architecture and the end-to-end build."
+      }
+    }
+  ]
+}
