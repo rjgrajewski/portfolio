@@ -48,7 +48,7 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 - [x] Manual section components: Education, Amazon, FlowJob, Rhymind, Portfolio-itself — placeholder content, each flagging itself as seed content pending Phase 8.
 - [x] CV download — real (generated placeholder) PDF at `frontend/public/cv/cv.pdf`, wired to a visible button in the sticky header.
 - [x] Responsive: desktop-primary, verified genuinely usable on a 375×812 mobile viewport (layout only at this stage — full-screen section takeover is Phase 3).
-- [ ] Deploys clean to staging
+- [x] Deploys clean to staging — pushed to `dev`, Amplify build `SUCCEED`, verified live at `https://dev.daz9bpic9q3nd.amplifyapp.com`: renders correctly, no console errors, `/cv/cv.pdf` serves `200` with the right content type and byte size.
 
 **Exit:** a recruiter who never touches the AI has a complete portfolio experience.
 
