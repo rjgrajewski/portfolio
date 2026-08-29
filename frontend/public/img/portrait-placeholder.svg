@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-hidden="true">
+  <circle cx="100" cy="100" r="100" fill="#171717" />
+  <circle cx="100" cy="100" r="99" fill="none" stroke="#e8a33d" stroke-opacity="0.4" stroke-width="2" />
+  <text x="100" y="118" text-anchor="middle" font-family="Georgia, serif" font-size="72" fill="#e8a33d">RG</text>
+</svg>
