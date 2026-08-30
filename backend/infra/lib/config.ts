@@ -87,7 +87,12 @@ const dev: EnvConfig = {
   region: "eu-central-1",
   bedrockModelId: "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
   dailyCircuitBreakerThreshold: 200,
-  mediaBreakerThreshold: 50,
+  // Was 50 — too tight to iterate on: one day of voice work + on-device
+  // checks re-vends on every page load (creds are memory-only) and trips it,
+  // which reads as "voice is broken". 200 matches the dev reasoning breaker;
+  // Polly TPS quota + the $25 AWS Budget alarm are still the hard backstops,
+  // and the dev Function URL is CORS-scoped + unadvertised. Prod stays 120.
+  mediaBreakerThreshold: 200,
   sessionMessageCap: 60,
   allowedOrigins: [
     "http://localhost:5173",

@@ -351,7 +351,10 @@ export function useConversation(): UseConversation {
           }
         },
         onError: (code, message) => {
-          console.warn("[voice] session error", code, message);
+          console.warn(
+            `[voice] unavailable — code=${code} — ${message} ` +
+              "(see the preceding [stt]/[tts] line for the underlying cause)",
+          );
           setListening(false);
           setPartialTranscript("");
           setVoiceErrorCode(code);

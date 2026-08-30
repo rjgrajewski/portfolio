@@ -200,11 +200,17 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
           bytes = await res.AudioStream.transformToByteArray();
           console.info(`[tts] Polly ok: ${bytes.byteLength} bytes mp3`);
         } catch (err) {
-          console.warn("[tts] Polly failed", err);
           clearMediaCredentials();
           if (err instanceof MediaCredentialError) {
+            // The specific cause (media_breaker_tripped / media_throttled /
+            // …) — the UI shows only the generic "credentials_refused" notice.
+            console.warn(
+              "[tts] media credentials unavailable —",
+              `${err.code}: ${err.message}`,
+            );
             fail("credentials_refused", err.message);
           } else {
+            console.warn("[tts] Polly request failed", err);
             fail("polly_failed", "Speech synthesis failed.");
           }
           return;

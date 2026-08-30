@@ -338,6 +338,16 @@ export async function createVoiceSession(
     try {
       creds = await getMediaCredentials();
     } catch (err) {
+      // Surface the REAL reason (media_breaker_tripped / media_throttled /
+      // media_internal / network / not_configured) — the UI collapses all of
+      // these to one "credentials_refused" notice, so the console is the only
+      // place the actual cause is visible.
+      console.warn(
+        "[stt] media credentials unavailable —",
+        err instanceof MediaCredentialError
+          ? `${err.code}: ${err.message}`
+          : String(err),
+      );
       clearMediaCredentials();
       finishCapture(
         "error",
@@ -382,6 +392,10 @@ export async function createVoiceSession(
     } catch (err) {
       clearMediaCredentials();
       if (err instanceof MediaCredentialError) {
+        console.warn(
+          "[stt] media credentials unavailable mid-stream —",
+          `${err.code}: ${err.message}`,
+        );
         finishCapture("error", "credentials_refused", err.message);
       } else if (state === "capturing") {
         console.warn("[stt] Transcribe stream error", err);

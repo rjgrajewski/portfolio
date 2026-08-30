@@ -78,11 +78,18 @@ export function TranscriptBar({
           ? "Voice on — just start talking."
           : "";
 
+  // When the collapsed line IS the degradation notice (no live transcript to
+  // preview yet), it must show in full — a clipped, unexpandable notice is
+  // useless. Transcript lines still get `truncate`; a notice wraps.
+  const lineIsNotice = !!notice && !listening && !last;
+
   return (
     <div className="pointer-events-auto mx-auto w-full max-w-2xl px-3">
-      {/* A persistent notice sits above the bar so it never masks the
-          transcript line, and never gets lost when the bar collapses. */}
-      {notice && !expanded && (messages.length > 0 || listening) ? (
+      {/* A persistent notice sits above the bar so it never masks a live
+          transcript line. When the bar has no transcript to show, the notice
+          becomes the bar's own line instead (see `lineIsNotice` below) — so
+          it's shown in exactly one place, always in full. */}
+      {notice && !expanded && !lineIsNotice ? (
         <p className="mb-1.5 px-1 text-right text-small text-neutral-500">
           {notice}
         </p>
@@ -126,20 +133,27 @@ export function TranscriptBar({
           </div>
         </div>
       ) : (
-        <div className={`flex items-center gap-2.5 px-3.5 py-2.5 ${card}`}>
+        <div
+          className={`flex gap-2.5 px-3.5 py-2.5 ${card} ${
+            lineIsNotice ? "items-start" : "items-center"
+          }`}
+        >
           {voiceMode ? (
             <span
               className={`h-1.5 w-1.5 shrink-0 rounded-full bg-accent ${
-                listening ? "animate-pulse" : ""
-              }`}
+                lineIsNotice ? "mt-[0.5rem]" : ""
+              } ${listening ? "animate-pulse" : ""}`}
               aria-hidden="true"
             />
           ) : null}
           <p
-            className={`min-w-0 flex-1 truncate text-small ${
-              notice ? "text-neutral-400" : "text-neutral-200"
+            className={`min-w-0 flex-1 text-small ${
+              lineIsNotice
+                ? "whitespace-normal break-words text-neutral-300"
+                : `truncate ${notice ? "text-neutral-400" : "text-neutral-200"}`
             }`}
             aria-live="polite"
+            role={lineIsNotice ? "status" : undefined}
           >
             {collapsedLine || (
               <span className="text-neutral-600">
