@@ -8,6 +8,8 @@ Format: `YYYY-MM-DD — <decision> — <one-line why>`
 
 ## 2026-08-31 — Corpus interview pass
 
+- 2026-08-31 — **Production git branch renamed `main` → `prod`.** Amplify URL follows the branch name, so production is now `https://prod.daz9bpic9q3nd.amplifyapp.com` (was `https://main.daz9bpic9q3nd.amplifyapp.com`). CORS on `portfolio-api-prod` / `portfolio-identity-prod` updated to match; GitHub default branch is `prod`; CI triggers on `prod` + `dev`. Matches the existing `dev`/`prod` CDK env names. The old `main` Amplify branch and git ref are removed after the new URL is live.
+
 - 2026-08-31 — **Flagship corpus refreshed from a Claude.ai voice interview** — `core.md` plus amazon (business + technical), education/flowjob/portfolio-itself business now carry first-hand detail (termination & tenure tools, WFS Manager of three, BA document-compliance tool, Graphic Design specialization, flowjob.it started as a personal script, documentation-first build). Manifest one-liners updated to match; synced to the `dev/` S3 prefix; `portfolio-api-dev` redeployed so the bundled copy matches. Prod still on the previous pass until an explicit prod sync. `scripts/sync-content.ts` (and the Lambda bundling copy) now skip `.DS_Store`.
 
 ## 2026-08-30 — Phase 4 (voice I/O) + OQ-8 resolution

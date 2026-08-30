@@ -114,7 +114,7 @@ const prod: EnvConfig = {
   // STAR stories) can easily pass 40. The daily breaker (500) is the real
   // bound; this only stops a stuck tab. Reload starts fresh.
   sessionMessageCap: 150,
-  allowedOrigins: ["https://main.daz9bpic9q3nd.amplifyapp.com"],
+  allowedOrigins: ["https://prod.daz9bpic9q3nd.amplifyapp.com"],
 };
 
 const configs: Record<EnvName, EnvConfig> = { dev, prod };

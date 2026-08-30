@@ -62,6 +62,6 @@ architecture — no always-on compute, everything scales to zero.
 ## Delivery
 
 Vite + React + TypeScript static SPA on **AWS Amplify Hosting**; the `dev`
-branch deploys to staging, `main` to production, which also gives dev / prod
+branch deploys to staging, `prod` to production, which also gives dev / prod
 separation from day one. Backend infrastructure is AWS CDK; deploys stay manual
 so infra changes are deliberate.

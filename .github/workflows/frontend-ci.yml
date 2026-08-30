@@ -2,7 +2,7 @@ name: frontend-ci
 
 on:
   push:
-    branches: [main, dev]
+    branches: [prod, dev]
   pull_request:
 
 jobs:
@@ -21,5 +21,5 @@ jobs:
       - run: npm run typecheck --workspace=frontend
       - run: npm run lint --workspace=frontend
 
-      # Deploy stays manual (Amplify Hosting builds on push to dev/main
+      # Deploy stays manual (Amplify Hosting builds on push to dev/prod
       # directly) — this workflow only gates code quality.
