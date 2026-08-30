@@ -7,6 +7,7 @@ interface Props {
   status: ConversationStatus;
   speaking: boolean;
   listening: boolean;
+  voiceMode: boolean;
   partialTranscript: string;
   /** Degradation copy — text-agent notice takes priority over the voice one. */
   textNotice: string | null;
@@ -41,6 +42,7 @@ export function TranscriptBar({
   status,
   speaking,
   listening,
+  voiceMode,
   partialTranscript,
   textNotice,
   voiceNotice,
@@ -63,7 +65,9 @@ export function TranscriptBar({
       ? `${last.role === "user" ? "You" : "Agent"}: ${last.text || "…"}`
       : notice
         ? notice
-        : "";
+        : voiceMode
+          ? "Voice on — just start talking."
+          : "";
 
   return (
     <div className="pointer-events-auto w-full">

@@ -33,8 +33,6 @@ interface Props {
   onActivate: () => void;
   disabled?: boolean;
   size?: number;
-  /** Caption shown at rest (voice mode off), e.g. "Tap to talk". */
-  restCaption?: string;
 }
 
 interface Lobe {
@@ -181,7 +179,6 @@ export function AgentVisualization({
   onActivate,
   disabled = false,
   size = 88,
-  restCaption = "Tap to talk",
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const reducedMotion = useReducedMotion();
@@ -196,8 +193,12 @@ export function AgentVisualization({
   const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
   const px = Math.round(size * dpr);
 
-  // Reduced motion: one static draw per state. States are told apart by
-  // size / brightness / silhouette (frozen phases), not by movement.
+  // Reduced motion: one static draw per state. With the text caption gone
+  // these carry the full load, so the four are deliberately stepped —
+  // rest small+faint, listening medium + a concentric "receiving" ring,
+  // thinking medium with pronounced lobes, speaking large + a solid amber
+  // core, error small + grey. Distinguishable by size / fill / silhouette,
+  // no motion needed.
   useEffect(() => {
     if (!reducedMotion) return;
     const ctx = canvasRef.current?.getContext("2d");
@@ -211,12 +212,20 @@ export function AgentVisualization({
     };
     const frozenLevel: Record<VizState, number> = {
       rest: 0,
-      listening: 0.5,
-      thinking: 0,
-      speaking: 0.7,
+      listening: 0.55,
+      thinking: 0.15,
+      speaking: 1,
       error: 0,
     };
     drawBlob(ctx, px, state, frozenT[state], frozenLevel[state]);
+    if (state === "speaking") {
+      // solid core so "speaking" reads as the loudest state even frozen
+      const cx = px / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cx, px * 0.24, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(242,182,88,0.85)";
+      ctx.fill();
+    }
   }, [reducedMotion, state, px]);
 
   // Animated loop — one loop for the component's life; reads state + levels
@@ -262,7 +271,7 @@ export function AgentVisualization({
   }, [reducedMotion, px]);
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center">
       <button
         type="button"
         onClick={onActivate}
@@ -271,10 +280,10 @@ export function AgentVisualization({
           disabled
             ? "Voice agent unavailable"
             : active
-              ? `Voice on — ${CAPTION[state].toLowerCase()}. Tap to leave.`
+              ? "Voice conversation active. Tap to leave."
               : "Talk to the agent"
         }
-        className="rounded-full transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+        className="rounded-full transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 active:scale-90"
       >
         <canvas
           ref={canvasRef}
@@ -283,8 +292,11 @@ export function AgentVisualization({
           style={{ width: size, height: size, display: "block" }}
         />
       </button>
-      <span className="select-none text-small text-neutral-500" aria-hidden="true">
-        {disabled ? "Voice unavailable" : active ? CAPTION[state] : restCaption}
+      {/* No visible caption — the four blob states are meant to read on
+          sight. Screen readers still get the state (announced on change)
+          and the button label. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {active && !disabled && state !== "rest" ? CAPTION[state] : ""}
       </span>
     </div>
   );

@@ -293,14 +293,20 @@ export function useConversation(): UseConversation {
   );
 
   const exitVoiceMode = useCallback(() => {
+    // Tapping the orb ends voice mode outright — including any in-flight
+    // turn and playback. (Barge-in is a separate path: it's triggered by
+    // *speaking*, never by a tap.)
+    abortRef.current?.abort();
+    abortRef.current = null;
     sessionRef.current?.close();
     sessionRef.current = null;
+    playerRef.current?.stop();
     setVoiceMode(false);
     setListening(false);
     setPartialTranscript("");
-    playerRef.current?.stop();
     setSpeaking(false);
-    console.info("[voice] mode OFF");
+    setStatus((s) => (s === "thinking" || s === "streaming" ? "idle" : s));
+    console.info("[voice] mode OFF (orb tap)");
   }, []);
 
   const enterVoiceMode = useCallback(async () => {
