@@ -8,6 +8,8 @@ import { TRUNCATED_ANSWER_NOTE } from "../../agent/degradation";
 interface TranscriptProps {
   messages: ChatMessage[];
   status: ConversationStatus;
+  /** True while Polly playback of the latest answer is scheduled/playing. */
+  speaking?: boolean;
 }
 
 /**
@@ -15,7 +17,7 @@ interface TranscriptProps {
  * announces text as it streams in. Auto-scrolls to the newest content
  * unless the reader has scrolled up.
  */
-export function Transcript({ messages, status }: TranscriptProps) {
+export function Transcript({ messages, status, speaking = false }: TranscriptProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -56,8 +58,18 @@ export function Transcript({ messages, status }: TranscriptProps) {
 
         return (
           <div key={m.id} className="flex flex-col gap-1">
-            <span className="text-small font-medium uppercase tracking-wider text-accent">
+            <span className="flex items-center gap-2 text-small font-medium uppercase tracking-wider text-accent">
               Agent
+              {isLast && speaking ? (
+                <span
+                  className="inline-flex items-end gap-0.5"
+                  aria-label="Speaking"
+                >
+                  <SpeakBar delay="0ms" />
+                  <SpeakBar delay="120ms" />
+                  <SpeakBar delay="240ms" />
+                </span>
+              ) : null}
             </span>
             {thinking ? (
               <span className="inline-flex gap-1" aria-label="The agent is thinking">
@@ -92,6 +104,15 @@ function Dot({ delay }: { delay: string }) {
     <span
       className="h-1.5 w-1.5 animate-bounce rounded-full bg-neutral-500"
       style={{ animationDelay: delay }}
+    />
+  );
+}
+
+function SpeakBar({ delay }: { delay: string }) {
+  return (
+    <span
+      className="w-0.5 animate-pulse bg-accent"
+      style={{ animationDelay: delay, height: "0.7rem" }}
     />
   );
 }

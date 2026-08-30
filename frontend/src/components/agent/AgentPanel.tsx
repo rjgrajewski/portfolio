@@ -1,4 +1,4 @@
-import { isAgentConfigured } from "../../config/runtime";
+import { isAgentConfigured, isVoiceConfigured } from "../../config/runtime";
 import { useConversation } from "../../agent/useConversation";
 import { deriveDegradation } from "../../agent/degradation";
 import { Transcript } from "./Transcript";
@@ -11,20 +11,37 @@ const STARTERS = [
 ];
 
 /**
- * The agent panel — lives in the agent zone (AgentZone.tsx). Text input, a
- * streamed transcript, and a "thinking" state (docs/ROADMAP.md § Phase 2).
+ * The agent panel — lives in the agent zone (AgentZone.tsx). Text input, an
+ * optional mic, a streamed transcript, and a "thinking" state
+ * (docs/ROADMAP.md § Phase 2 / § Phase 4).
  *
  * Availability is not decided here — `deriveDegradation` (agent/degradation.ts)
  * is the single source of truth (docs/ROADMAP.md § Phase 6). This component
- * just renders its verdict: an unavailable notice when the backend isn't
- * wired, an inline banner when a turn failed, and — either way — the manual
- * portfolio + CV keep working, which the copy points at.
+ * renders its verdict: an unavailable notice when the backend isn't wired,
+ * an inline banner when a turn failed, a separate quieter line when a voice
+ * path failed — and either way the text composer and the manual portfolio +
+ * CV keep working, which the copy points at.
  */
 export function AgentPanel() {
-  const { messages, status, errorCode, canSend, send, stop } = useConversation();
+  const {
+    messages,
+    status,
+    errorCode,
+    voiceErrorCode,
+    canSend,
+    listening,
+    partialTranscript,
+    speaking,
+    send,
+    startVoice,
+    stopVoice,
+    stop,
+  } = useConversation();
+
   const degradation = deriveDegradation({
     configured: isAgentConfigured,
     errorCode,
+    voice: { configured: isVoiceConfigured, errorCode: voiceErrorCode },
   });
   const busy = status === "thinking" || status === "streaming";
   const isEmpty = messages.length === 0;
@@ -39,6 +56,7 @@ export function AgentPanel() {
         <p className="mt-1 text-small text-neutral-400">
           It answers in Rafal&rsquo;s third person and opens the matching
           section as it talks.
+          {degradation.voice.available ? " Tap the mic to ask out loud." : ""}
         </p>
       </div>
 
@@ -67,7 +85,7 @@ export function AgentPanel() {
               </ul>
             </div>
           ) : (
-            <Transcript messages={messages} status={status} />
+            <Transcript messages={messages} status={status} speaking={speaking} />
           )}
 
           {degradation.notice ? (
@@ -79,11 +97,25 @@ export function AgentPanel() {
             </p>
           ) : null}
 
+          {degradation.voice.notice ? (
+            <p
+              role="status"
+              className="mt-2 text-small text-neutral-500"
+            >
+              {degradation.voice.notice}
+            </p>
+          ) : null}
+
           <Composer
             canSend={inputEnabled}
             busy={busy}
             onSend={send}
             onStop={stop}
+            voiceAvailable={degradation.voice.available}
+            listening={listening}
+            partialTranscript={partialTranscript}
+            onMicStart={startVoice}
+            onMicStop={stopVoice}
           />
         </>
       )}

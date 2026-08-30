@@ -1,12 +1,7 @@
 /**
- * One shared DynamoDB document client for the guardrail tables
- * (sessions, usage-counters, conversation-logs). Module-level so warm
- * containers reuse the connection pool.
+ * Re-export of the shared DynamoDB document client
+ * (backend/functions/shared/ddb.ts). Kept as a local module so the other
+ * files in this function can keep importing `./ddb` unchanged.
  */
 
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-
-export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
-  marshallOptions: { removeUndefinedValues: true },
-});
+export { ddb } from "../../shared/ddb";
