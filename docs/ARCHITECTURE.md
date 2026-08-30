@@ -304,8 +304,9 @@ The tension: Transcribe streaming and Polly bidirectional streaming need a **per
 
 | Path                          | Transport                                                                                                                     | Notes                                                                                                                                                                                                               |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mic audio → text              | **Browser → Amazon Transcribe streaming directly**, using short-lived credentials from a **Cognito Identity Pool** guest role | No server in the loop. Scales to zero. IAM role scoped to `transcribe:StartStreamTranscription` only.                                                                                                               |
-| Answer text → speech          | **Browser → Amazon Polly directly** (generative), same Cognito creds                                                          | Same role, scoped to `polly:SynthesizeSpeech` (+ the streaming action if used). Chunked-`SynthesizeSpeech` fallback if bidirectional streaming isn't usable.                                                        |
+| Get media credentials         | **Browser → `backend/functions/credentials/` Lambda** (Function URL, buffered JSON)                                          | The OQ-8 fix. Token bucket → **media** circuit-breaker → `sts:AssumeRole` on `portfolio-media-guest-<env>`. **No Cognito Identity Pool** (an unsigned pool call can't be breaker-gated). 900s TTL (the STS floor).   |
+| Mic audio → text              | **Browser → Amazon Transcribe streaming directly** (`en-US`), using the short-lived credentials from the vending Lambda      | No server in the audio loop. Scales to zero. Role scoped to `transcribe:StartStreamTranscription` only. Silence ends the turn; interim results shown live (`frontend/src/agent/stt.ts`).                             |
+| Answer text → speech          | **Browser → Amazon Polly directly** (generative, `Ruth`), same vended credentials                                            | Role scoped to `polly:SynthesizeSpeech` only. Sentence-chunked `SynthesizeSpeech` (OQ-4: bidirectional streaming exists but isn't browser-reachable); synth *n+1* while *n* plays (`frontend/src/agent/tts.ts`).     |
 | Question → answer (reasoning) | **Browser → Lambda** (Function URL, response streaming) → Bedrock                                         | This is where the [session cap](#abuse-protection-and-cost-control), the [circuit-breaker](#abuse-protection-and-cost-control), and [logging](#logging) are enforced. Bedrock is **never** called from the browser. |
 
 
@@ -315,7 +316,17 @@ The tension: Transcribe streaming and Polly bidirectional streaming need a **per
 - **CORS is configured directly on the Function URL** (the `cors` block of the CDK `FunctionUrl` construct), not via API Gateway.
 - **CloudFront in front is deferred** — not needed for Tuesday; revisit only if abuse patterns or caching needs appear post-launch.
 
-**Abuse concern with browser-direct media:** the Cognito guest role can be assumed by anyone who loads the page — including a script that never loads the page at all, since nothing about the credential exchange requires a browser. Current mitigations: (a) role scoped to exactly two actions, nothing else; (b) short credential TTL; (c) the reasoning Lambda is the real spend gate for the *text* path — Transcribe/Polly cost per minute of audio is small per call. **What this does *not* yet have is a server-side quota on the Transcribe/Polly path itself** — see the corrected abuse-protection reasoning below and [OQ-8](#open-questions--risks-to-resolve-during-the-build), now a blocking item. If this proves insufficient, fall back to an authenticated credential-vending Lambda that checks the circuit-breaker before returning creds (`backend/functions/credentials/`).
+**Abuse concern with browser-direct media — resolved (OQ-8).** The original plan vended media credentials from a Cognito Identity Pool guest role. That was abandoned: `GetId` / `GetCredentialsForIdentity` are **unsigned** calls that need only the (public) pool id, so a script can pull guest credentials without ever loading the page and there is **no point at which a spend breaker can gate issuance** — and disabling unauthenticated identities would force real login, which the product rules out. Cognito cannot close this hole.
+
+Instead, `backend/functions/credentials/` is the **only** way to obtain media credentials:
+
+1. an in-container token bucket (one hot client bound),
+2. an atomic increment-and-check of the daily **media** circuit-breaker — a counter **independent** of the reasoning breaker (`pk = media#day#<date>` in the same `usage-counters` table; per-env `mediaBreakerThreshold`), so voice abuse can't disable the text agent or vice versa,
+3. only then `sts:AssumeRole` on `portfolio-media-guest-<env>` — a role scoped to **exactly** `polly:SynthesizeSpeech` + `transcribe:StartStreamTranscription`, whose trust policy names **one** principal: this Lambda's execution role. `DurationSeconds` is 900 — the STS floor, and deliberately the minimum (a leaked set is useless after 15 min; the frontend re-vends transparently; the breaker bounds total grants regardless).
+
+Breaker tripped → `{ ok:false, code:"media_breaker_tripped" }` and **zero credentials issued**; the frontend routes that code through `frontend/src/agent/degradation.ts` to a voice-off / text-still-works state. **Empirically verified on dev** (2026-08-30): a direct `AssumeRole` of the guest role is `AccessDenied` even to full account admin; vended credentials are `AccessDenied` for every action outside the two (incl. `bedrock:InvokeModel` and re-assuming themselves); setting the media threshold to 0 makes the endpoint refuse and issue nothing. There is no credential path that bypasses the breaker.
+
+**Residual risk (accepted).** Within a live 15-min credential window the creds are not bounded on *characters* — bounding those would need the browser to report usage (untrustworthy) or a media proxy (defeats browser-direct). The bounds that do apply: the media breaker caps *grants* per day, Polly generative's low per-account TPS quota caps throughput inside a window, and the `portfolio-monthly-gross-usd25` AWS Budget alarm is the hard backstop. Full elimination needs the plan-B WebSocket media proxy — deferred, tracked in the backlog.
 
 **Alternative if browser-direct is rejected:** API Gateway **WebSocket API** + a Lambda that proxies frames to Transcribe. Still serverless, still scales to zero, but more moving parts and the 15-minute Lambda cap to design around. Kept as plan B.
 
@@ -355,6 +366,7 @@ This is a public endpoint that spends money per request. It needs protection fro
 | **Request throttling**              | Token-bucket check inside the reasoning Lambda — the Function URL decision ([above](#real-time-media-transport)) means API Gateway's throttling/usage-plans aren't available; optional CloudFront rate rules if abuse appears           | Function           |
 | **Per-session message cap**         | Hard cap on exchanges per `sessionId`, checked server-side against the `sessions` table; surfaced gracefully in the UI when hit. **Not an abuse control** — see note below.                                                            | Function + client |
 | **Real-time daily circuit-breaker** | Atomic daily counter in `usage-counters`; every reasoning invocation checks it first. Over threshold → degrade to **text-only** (skip Polly) or **disable the agent** and fall through to the [manual portfolio](#graceful-degradation) | Function          |
+| **Media circuit-breaker (OQ-8)**    | A **second, independent** atomic daily counter in `usage-counters` (`pk = media#day#<date>`), checked by `backend/functions/credentials/` **before** it will `sts:AssumeRole` and hand the browser Polly/Transcribe credentials. Over threshold → no credentials issued, voice degrades to text. Independent of the reasoning breaker so neither path's abuse disables the other. | Function          |
 | **AWS Budgets (manual, not CDK)**   | Two monthly budgets — `portfolio-monthly-gross-usd25` (the real ceiling) and `portfolio-monthly-net-usd25` (the "credits are running out" signal) — provisioned by hand via CLI; SNS topic `portfolio-billing-alerts` (`us-east-1`), email subscription confirmed. See below.                                                        | Account           |
 | **Bedrock never client-side**       | The browser can reach Polly/Transcribe directly (bounded, cheap) but **never** Bedrock                                                                                                                                                  | Architecture      |
 
@@ -560,14 +572,15 @@ portfolio/
 │   │   ├── package.json
 │   │   ├── bin/app.ts
 │   │   ├── lib/
-│   │   │   ├── config.ts               # per-env (dev/prod) parameters — model id, breaker &
-│   │   │   │                           #   session-cap thresholds, CORS origins, content bucket name
+│   │   │   ├── config.ts               # per-env (dev/prod) parameters — model id, breaker /
+│   │   │   │                           #   media-breaker / session-cap thresholds, CORS origins, bucket
 │   │   │   ├── api-stack.ts            # Phase 2: reasoning Lambda + streaming Function URL (CORS,
 │   │   │   │                           #   in-function throttle) + the 3 DynamoDB tables + content
 │   │   │   │                           #   bucket. `agent-stack.ts` (below) was folded in here for
 │   │   │   │                           #   Phase 2 — one deploy unit; split out later if it grows.
-│   │   │   ├── identity-stack.ts       # NOT YET CREATED — Cognito Identity Pool + scoped guest role;
-│   │   │   │                           #   Phase 4, only after OQ-8 is resolved (see § Open questions)
+│   │   │   ├── identity-stack.ts       # Phase 4 (OQ-8): NO Cognito pool — the credential-vending
+│   │   │   │                           #   Lambda + `portfolio-media-guest-<env>` (scoped to exactly
+│   │   │   │                           #   Polly SynthesizeSpeech + Transcribe StartStreamTranscription)
 │   │   │   └── guardrails-stack.ts     # empty skeleton — the AWS Budgets AND the SNS topic already
 │   │   │                               #   exist, created by hand; this stack must not recreate either
 │   │   │                               #   (see § Abuse protection and cost control)
@@ -582,15 +595,19 @@ portfolio/
 │       │   │   ├── tools.ts            # get_content(topic, layer), reveal_section(sectionId)
 │       │   │   ├── contentStore.ts     # bundled files by default; S3 GetObject when CONTENT_BUCKET set
 │       │   │   ├── sessionCap.ts       # per-session message cap (sessions table)
-│       │   │   ├── breaker.ts          # real-time daily circuit-breaker (usage-counters table)
-│       │   │   ├── throttle.ts         # in-container token bucket (Function URL has no built-in)
+│       │   │   ├── breaker.ts / throttle.ts / ddb.ts   # thin env-binding shims over functions/shared/
 │       │   │   ├── log.ts              # conversation content + timestamp, no identity
-│       │   │   ├── ddb.ts / types.ts / awslambda.d.ts   # shared client, wire types, stream global
+│       │   │   ├── types.ts / awslambda.d.ts           # wire types, stream global
 │       │   ├── package.json            # @aws-sdk/* are devDependencies — externalised at bundle time
 │       │   └── tsconfig.json
-│       └── credentials/                # OPTIONAL — vends scoped short-lived creds if browser-direct
-│           │                           #            Cognito access proves too permissive
-│           └── src/handler.ts
+│       ├── shared/                     # imported by BOTH Lambdas (relative import, not a pkg):
+│       │   ├── breaker.ts              #   circuit-breaker — reasoning + media counters in one module
+│       │   ├── tokenBucket.ts          #   token-bucket factory
+│       │   └── ddb.ts                  #   the DynamoDB document client
+│       └── credentials/                # Phase 4 (OQ-8) — the ONLY way to get media credentials:
+│           ├── src/handler.ts          #   token bucket → media breaker → sts:AssumeRole (900s) | refuse
+│           ├── package.json
+│           └── tsconfig.json
 │
 ├── content/                            # knowledge corpus — English only, source of truth
 │   ├── core/
@@ -634,12 +651,12 @@ portfolio/
 
 - `OQ-1` (tool-use sequencing vs. streaming, and the Lambda→browser wire format) — resolved in Phase 2. The wire format is the **NDJSON `{text|action|done|error}` contract** now recorded in [DECISIONS.md](DECISIONS.md) (2026-08-30) and implemented in `backend/functions/agent/src/types.ts` + `frontend/src/agent/transport.ts`: one connection per user turn, `reveal_section` sent as an `action` frame the instant the model emits it, exactly one terminal frame (`done` XOR `error`), `get_content` never in the stream, unknown frame types ignored. `reveal_section` stays a genuine tool call (two model calls per "goes deep" turn accepted). The Phase 2 verification question — can Haiku 4.5 on Bedrock emit `get_content` + `reveal_section` in the same turn — is **answered yes**: `scripts/verify-parallel-tools.ts` got both tools in one turn 6/6 runs (temperature 0), with no leading prose. A "goes deep" turn is therefore **2 model calls, not 3**. Plan B (demote `reveal_section` to an inline text marker) was not needed. The number stays retired, not reused.
 - `OQ-2` (Bedrock model access in `eu-central-1`) — resolved 2026-08-29, see [§ Region](#region) and [§ Reasoning](#reasoning--amazon-bedrock-claude-haiku-45). The number stays retired, not reused.
+- `OQ-4` (Polly generative bidirectional streaming) — resolved 2026-08-30, Phase 4. `StartSpeechSynthesisStream` (announced 2026-03, generative-only, HTTP/2 event streams) **exists** and is in the AWS SDK for JavaScript v3, but its request-side event stream needs Node's HTTP/2 handler — a browser can't open raw HTTP/2 from JS, `fetch` request-body streaming isn't full-duplex, and there is **no Polly WebSocket fallback** (unlike Transcribe streaming). Since Bedrock is never called from the browser there is no server in the media loop to run the Node handler, so it is **not usable browser-direct**. The [sentence-chunked `SynthesizeSpeech` fallback](#text-to-speech--amazon-polly-generative-tier) is used instead (synthesise sentence *n+1* while *n* plays; fire the first sentence the instant it's complete). Meets the latency bar — audio starts while the answer is still streaming. Full write-up: [DECISIONS.md](DECISIONS.md) and `docs/voice-notes.md`. The number stays retired, not reused.
+- `OQ-8` (Cognito guest-role abuse ceiling) — resolved 2026-08-30, Phase 4. **Cognito could not close it** — `GetId` / `GetCredentialsForIdentity` are unsigned calls needing only the public pool id, so there is no point at which a spend breaker can gate issuance, and disabling unauthenticated identities would force real login (ruled out by the product). Resolution: **no Identity Pool at all.** `backend/functions/credentials/` vends the media credentials, checking a daily **media** circuit-breaker (independent of the reasoning breaker) before it will `sts:AssumeRole` a role scoped to exactly `polly:SynthesizeSpeech` + `transcribe:StartStreamTranscription`, whose trust policy names only that Lambda. 900s TTL (the STS floor). **Empirically verified on dev**: no bypass path (direct `AssumeRole` denied even to full account admin; tripped breaker issues zero credentials; vended creds denied for every action outside the two). See [§ Real-time media transport](#real-time-media-transport) and [§ Abuse protection and cost control](#abuse-protection-and-cost-control). The number stays retired, not reused.
 
-- **OQ-3 — Real-time media transport.** Validate the [browser-direct-to-Polly/Transcribe via Cognito](#real-time-media-transport) plan end to end, including whether it's acceptable from a cost/abuse standpoint, before committing. Confirm plan B (API Gateway WebSocket proxy) is a viable fallback if not. — *Phase 4 (spike earlier)*
-- **OQ-4 — Polly generative bidirectional streaming.** Does the bidirectional streaming API exist in a usable form, which engine/voices does it support, and is it reachable from the browser SDK with Cognito creds? If not, confirm the sentence-chunked `SynthesizeSpeech` fallback meets the latency bar. — *Phase 4*
+- **OQ-3 — Real-time media transport.** Validate the [browser-direct-to-Polly/Transcribe](#real-time-media-transport) plan end to end, including whether it's acceptable from a cost/abuse standpoint, before committing. Confirm plan B (API Gateway WebSocket proxy) is a viable fallback if not. — *Phase 4 (spike earlier)*
 - **OQ-5 — Transcribe streaming automatic language ID for Polish.** Does it now cover `pl-PL` for the streaming path? (The explicit EN/PL toggle stays regardless — it's needed for voice selection.) — *Phase 5*
 - **OQ-6 — Polish male generative voice.** None confirmed. Check current availability; otherwise accept a female Polish voice. — *Phase 5*
-- **OQ-7 — EN/PL voice identity.** Confirm whether a single Polly generative polyglot voice can cover both acceptably; if not (expected), choose the English female voice that pairs best tonally with `Ola`/`Ewa`. Now that the confirmed English generative roster is known (see [§ Region](#region)), this is a choice among `Danielle`, `Joanna`, `Matthew`, `Ruth`, `Salli`, `Stephen`, `Tiffany` (`en-US`) and `Amy`, `Brian` (`en-GB`), not an open-ended search. — *Phase 5*
-- **OQ-8 — Cognito guest-role abuse ceiling — blocking, not just "resolve during Phase 4".** Guest credentials from the Identity Pool can be pulled by **anyone with a script**, without ever loading the page — nothing about the credential exchange requires a browser. On the Transcribe/Polly path there is currently **no server-side quota at all** (the per-session cap is client-generated and trivially rotated — see the [correction in Abuse protection](#abuse-protection-and-cost-control) — and the daily circuit-breaker only guards the reasoning path). Polly's generative tier runs roughly **$30 per 1M characters**, so this is a real way to blow the 100 PLN ceiling in an afternoon, not a theoretical gap. **This must be resolved before the Identity Pool is provisioned to production** (`identity-stack` stays out of Phase 0 and only ships in Phase 4, after this is settled) — if the scoped role + TTL aren't sufficient on their own, switch to the credential-vending Lambda that checks the circuit-breaker before returning creds. — *Phase 4, blocking*
+- **OQ-7 — EN/PL voice identity.** Confirm whether a single Polly generative polyglot voice can cover both acceptably; if not (expected), choose the English female voice that pairs best tonally with `Ola`/`Ewa`. Now that the confirmed English generative roster is known (see [§ Region](#region)), this is a choice among `Danielle`, `Joanna`, `Matthew`, `Ruth`, `Salli`, `Stephen`, `Tiffany` (`en-US`) and `Amy`, `Brian` (`en-GB`), not an open-ended search. **English half settled in Phase 4: `Ruth` (en-US generative)** — see `docs/voice-notes.md`; the PL pairing is confirmed in Phase 5. — *Phase 5*
 - **OQ-9 — WAF later or not at all.** Revisit after launch if abuse patterns appear; the ~$5/mo web-ACL floor is the reason it's deferred. — *post-launch*
 

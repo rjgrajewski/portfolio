@@ -6,12 +6,26 @@
  * message, stream frames into that agent message, and end on the single
  * terminal frame (`done` or `error`). `reveal_section` actions are applied
  * the instant they arrive, through the shared reveal path (uiActions.ts).
+ *
+ * Phase 4 — voice is a layer on top, not a separate machine:
+ *   - a spoken turn is an ordinary turn whose reply text is ALSO piped to
+ *     Polly (tts.ts) as it streams — first sentence synthesised the moment
+ *     it's complete, while the answer is still arriving, so audio and the
+ *     section reveal land together (the reveal already fires on the `action`
+ *     frame, before the prose).
+ *   - voice input (stt.ts) resolves to a transcript, which is submitted
+ *     through the exact same turn path — so a visitor can ask by voice, then
+ *     type the next question, in one conversation.
+ *   - every voice failure leaves the text path completely untouched.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { runtimeConfig } from "../config/runtime";
 import { getSessionId } from "./sessionId";
 import { applyAgentAction } from "./uiActions";
+import { createSpeechPlayer, type SpeechPlayer } from "./tts";
+import { startListening, type RecognizerHandle } from "./stt";
+import type { VoiceErrorCode } from "./degradation";
 import {
   AgentTransportError,
   streamAgentTurn,
@@ -19,11 +33,7 @@ import {
   type HistoryTurn,
 } from "./transport";
 
-export type ConversationStatus =
-  | "idle"
-  | "thinking"
-  | "streaming"
-  | "error";
+export type ConversationStatus = "idle" | "thinking" | "streaming" | "error";
 
 export interface ChatMessage {
   id: string;
@@ -39,8 +49,20 @@ export interface UseConversation {
   messages: ChatMessage[];
   status: ConversationStatus;
   errorCode: ErrorCode | null;
+  voiceErrorCode: VoiceErrorCode | null;
   canSend: boolean;
+  listening: boolean;
+  partialTranscript: string;
+  speaking: boolean;
+  /** Text turn — reply is not spoken. */
   send: (text: string) => void;
+  /** Start mic capture; the transcript is submitted as a spoken turn. */
+  startVoice: () => void;
+  /** Finish mic capture early ("done talking"). */
+  stopVoice: () => void;
+  /** Unlock audio playback from a user gesture (mobile autoplay). */
+  unlockAudio: () => void;
+  /** Abort the in-flight turn + any playback. */
   stop: () => void;
   reset: () => void;
 }
@@ -53,10 +75,47 @@ export function useConversation(): UseConversation {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ConversationStatus>("idle");
   const [errorCode, setErrorCode] = useState<ErrorCode | null>(null);
+  const [voiceErrorCode, setVoiceErrorCode] = useState<VoiceErrorCode | null>(
+    null,
+  );
+  const [listening, setListening] = useState(false);
+  const [partialTranscript, setPartialTranscript] = useState("");
+  const [speaking, setSpeaking] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  const playerRef = useRef<SpeechPlayer | null>(null);
+  const recognizerRef = useRef<RecognizerHandle | null>(null);
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  messagesRef.current = messages;
+
   const busy = status === "thinking" || status === "streaming";
-  const canSend = runtimeConfig.agentUrl !== null && !busy;
+  const canSend = runtimeConfig.agentUrl !== null && !busy && !listening;
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      playerRef.current?.stop();
+      recognizerRef.current?.cancel();
+    };
+  }, []);
+
+  const getPlayer = useCallback((): SpeechPlayer => {
+    if (!playerRef.current) {
+      playerRef.current = createSpeechPlayer({
+        onStart: () => setSpeaking(true),
+        onIdle: () => setSpeaking(false),
+        onError: (code) => {
+          setSpeaking(false);
+          setVoiceErrorCode(code);
+        },
+      });
+    }
+    return playerRef.current;
+  }, []);
+
+  const unlockAudio = useCallback(() => {
+    void getPlayer().unlock();
+  }, [getPlayer]);
 
   const appendToAgentMessage = useCallback((id: string, delta: string) => {
     setMessages((prev) =>
@@ -65,9 +124,7 @@ export function useConversation(): UseConversation {
   }, []);
 
   const setAgentMessageText = useCallback((id: string, text: string) => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, text } : m)),
-    );
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text } : m)));
   }, []);
 
   const markTruncated = useCallback((id: string) => {
@@ -76,13 +133,13 @@ export function useConversation(): UseConversation {
     );
   }, []);
 
-  const send = useCallback(
-    (raw: string) => {
+  const runTurn = useCallback(
+    (raw: string, opts: { speak: boolean }) => {
       const text = raw.trim();
       const url = runtimeConfig.agentUrl;
       if (!text || !url || abortRef.current) return;
 
-      const history: HistoryTurn[] = messages
+      const history: HistoryTurn[] = messagesRef.current
         .filter((m) => m.text.trim().length > 0)
         .map((m) => ({
           role: m.role === "agent" ? "assistant" : "user",
@@ -97,6 +154,11 @@ export function useConversation(): UseConversation {
       ]);
       setErrorCode(null);
       setStatus("thinking");
+
+      const player = opts.speak ? getPlayer() : null;
+      // A fresh spoken turn cancels any lingering playback from the last one.
+      player?.stop();
+      if (opts.speak) setVoiceErrorCode(null);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -116,19 +178,21 @@ export function useConversation(): UseConversation {
             if (frame.type === "text") {
               sawText = true;
               setStatus("streaming");
-              appendToAgentMessage(agentId, String(frame.delta ?? ""));
+              const delta = String(frame.delta ?? "");
+              appendToAgentMessage(agentId, delta);
+              player?.push(delta);
             } else if (frame.type === "action") {
               applyAgentAction(frame);
             } else if (frame.type === "done") {
               sawTerminal = true;
               setStatus("idle");
+              player?.end();
             } else if (frame.type === "error") {
               sawTerminal = true;
               setErrorCode((frame.code as ErrorCode) ?? "internal");
               setStatus("error");
+              player?.stop();
               if (sawText) {
-                // Partial answer already on screen — keep it, flag it as
-                // cut short. The banner (AgentPanel) carries the "why".
                 markTruncated(agentId);
               } else {
                 setAgentMessageText(
@@ -137,7 +201,6 @@ export function useConversation(): UseConversation {
                 );
               }
             }
-            // unknown frame types: ignored on purpose
           }
         } catch (err) {
           if (!controller.signal.aborted) {
@@ -145,8 +208,8 @@ export function useConversation(): UseConversation {
               err instanceof AgentTransportError ? "network" : "internal";
             setErrorCode(code);
             setStatus("error");
+            player?.stop();
             if (sawText) {
-              // Connection dropped mid-answer — keep what arrived, flag it.
               markTruncated(agentId);
             } else {
               setAgentMessageText(
@@ -157,29 +220,102 @@ export function useConversation(): UseConversation {
           }
         } finally {
           if (!sawTerminal && !controller.signal.aborted) {
-            // Stream ended without a terminal frame — treat as a soft error.
             setStatus((s) => (s === "error" ? s : "idle"));
+            player?.end();
           }
           abortRef.current = null;
         }
       })();
     },
-    [messages, appendToAgentMessage, setAgentMessageText, markTruncated],
+    [
+      appendToAgentMessage,
+      setAgentMessageText,
+      markTruncated,
+      getPlayer,
+    ],
   );
+
+  const send = useCallback(
+    (text: string) => runTurn(text, { speak: false }),
+    [runTurn],
+  );
+
+  const stopVoice = useCallback(() => {
+    recognizerRef.current?.stop();
+  }, []);
+
+  const startVoice = useCallback(() => {
+    if (recognizerRef.current || busy) return;
+    if (runtimeConfig.credentialsUrl === null) return;
+
+    // The mic press is our user gesture — unlock playback for the reply.
+    void getPlayer().unlock();
+    playerRef.current?.stop();
+
+    setVoiceErrorCode(null);
+    setPartialTranscript("");
+    setListening(true);
+
+    recognizerRef.current = startListening({
+      onPartial: (t) => setPartialTranscript(t),
+      onFinal: (t) => {
+        recognizerRef.current = null;
+        setListening(false);
+        setPartialTranscript("");
+        const clean = t.trim();
+        if (clean.length > 0) runTurn(clean, { speak: true });
+      },
+      onError: (code, message) => {
+        recognizerRef.current = null;
+        setListening(false);
+        setPartialTranscript("");
+        setVoiceErrorCode(code);
+        console.warn("voice input error", code, message);
+      },
+    });
+  }, [busy, getPlayer, runTurn]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    recognizerRef.current?.cancel();
+    recognizerRef.current = null;
+    playerRef.current?.stop();
+    setListening(false);
+    setPartialTranscript("");
+    setSpeaking(false);
     setStatus((s) => (s === "thinking" || s === "streaming" ? "idle" : s));
   }, []);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    recognizerRef.current?.cancel();
+    recognizerRef.current = null;
+    playerRef.current?.stop();
     setMessages([]);
     setErrorCode(null);
+    setVoiceErrorCode(null);
+    setListening(false);
+    setPartialTranscript("");
+    setSpeaking(false);
     setStatus("idle");
   }, []);
 
-  return { messages, status, errorCode, canSend, send, stop, reset };
+  return {
+    messages,
+    status,
+    errorCode,
+    voiceErrorCode,
+    canSend,
+    listening,
+    partialTranscript,
+    speaking,
+    send,
+    startVoice,
+    stopVoice,
+    unlockAudio,
+    stop,
+    reset,
+  };
 }
