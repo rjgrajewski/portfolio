@@ -89,6 +89,24 @@ Fix (`frontend/src/agent/pcmChunker.ts` + rewritten `stt.ts`):
 
 Still needs the live mic pass on staging (Safari 26 desktop + phone).
 
+## STT IAM action (2026-08-30)
+
+Second staging test, after the sample-rate fix: audio was correct (logs
+confirmed `sampleRate = 16000 Hz … pass-through` and `first PCM chunk: 3200
+bytes … s16le`) but Transcribe returned, post-handshake,
+`AccessDeniedException … not authorized to perform:
+transcribe:StartStreamTranscriptionWebSocket`. The browser SDK reaches
+Transcribe streaming over a **presigned WebSocket**, which is a *separate
+IAM action* from the HTTP/2 `transcribe:StartStreamTranscription` the Node
+SDK (and `scripts/check-availability.ts`) uses. The guest role had only the
+HTTP/2 form.
+
+Fix: `portfolio-media-guest-<env>` now grants
+`transcribe:StartStreamTranscriptionWebSocket` and **not** the HTTP/2 form
+(these creds are browser-only). `polly:SynthesizeSpeech` was checked for the
+same trap — Polly synth has no WebSocket/streaming action variant, so it was
+already correct. Regression guard: `npm run verify-oq8`.
+
 ## OQ-4 — Polly bidirectional streaming. Resolved 2026-08-30: not browser-reachable → sentence chunking.
 
 **Finding.** Amazon Polly shipped a real bidirectional streaming API,

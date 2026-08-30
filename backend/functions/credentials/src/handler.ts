@@ -17,7 +17,8 @@
  *      disable the text agent or vice versa,
  *   3. only then calls `sts:AssumeRole` on `portfolio-media-guest-<env>`,
  *      a role scoped to exactly `polly:SynthesizeSpeech` and
- *      `transcribe:StartStreamTranscription` and nothing else,
+ *      `transcribe:StartStreamTranscriptionWebSocket` (the browser's real
+ *      calls — the WebSocket form, not the Node HTTP/2 one) and nothing else,
  *   4. returns short-lived credentials (900s — the STS AssumeRole floor;
  *      see docs/DECISIONS.md for why the minimum is the right choice).
  *

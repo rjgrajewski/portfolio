@@ -17,6 +17,7 @@
     "check-availability": "tsx scripts/check-availability.ts",
     "verify-parallel-tools": "tsx scripts/verify-parallel-tools.ts",
     "verify-resampler": "tsx scripts/verify-resampler.ts",
+    "verify-oq8": "tsx scripts/verify-oq8.ts",
     "estimate-cost": "tsx scripts/estimate-cost.ts",
     "content:sync": "tsx scripts/sync-content.ts"
   },

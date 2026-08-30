@@ -30,9 +30,12 @@ export interface IdentityStackProps extends StackProps {
  * credential-vending Lambda that calls `sts:AssumeRole` itself.
  *
  * Contents:
- *   - `portfolio-media-guest-<env>` — an IAM role scoped to EXACTLY
- *     `polly:SynthesizeSpeech` and `transcribe:StartStreamTranscription`
- *     and nothing else. Its trust policy names one principal: the
+ *   - `portfolio-media-guest-<env>` — an IAM role scoped to EXACTLY the two
+ *     actions the browser makes with these credentials:
+ *     `polly:SynthesizeSpeech` and
+ *     `transcribe:StartStreamTranscriptionWebSocket` (the WebSocket form,
+ *     NOT the HTTP/2 `StartStreamTranscription` — see the policy comment
+ *     below). Nothing else. Its trust policy names one principal: the
  *     credential-vending Lambda's execution role. Nothing else can assume
  *     it — there is no unsigned path to these credentials.
  *   - `portfolio-credentials-<env>` — the only way to obtain those
@@ -106,9 +109,10 @@ export class IdentityStack extends Stack {
     const mediaGuestRole = new Role(this, "MediaGuestRole", {
       roleName: mediaGuestRoleName,
       description:
-        "Assumed ONLY by portfolio-credentials-<env>. Scoped to Polly " +
-        "SynthesizeSpeech + Transcribe StartStreamTranscription. See " +
-        "docs/ARCHITECTURE.md § Abuse protection (OQ-8).",
+        "Assumed ONLY by portfolio-credentials-<env>. Scoped to exactly " +
+        "polly:SynthesizeSpeech + transcribe:StartStreamTranscriptionWebSocket " +
+        "(the browser's real calls). See docs/ARCHITECTURE.md § Abuse " +
+        "protection (OQ-8).",
       // Trust: exactly the credential-vending Lambda's execution role.
       assumedBy: credentialsFn.role!,
       // AssumeRole DurationSeconds (900s) is well under the 3600s default
@@ -117,11 +121,24 @@ export class IdentityStack extends Stack {
 
     mediaGuestRole.addToPolicy(
       new PolicyStatement({
-        sid: "MediaGuestExactlyTwoActions",
+        sid: "MediaGuestBrowserSpeechOnly",
         effect: Effect.ALLOW,
         actions: [
+          // Browser TTS (frontend/src/agent/tts.ts) — a plain SigV4 POST.
+          // No WebSocket/streaming IAM variant; the generative engine is a
+          // request parameter, not a separate action.
           "polly:SynthesizeSpeech",
-          "transcribe:StartStreamTranscription",
+          // Browser STT (frontend/src/agent/stt.ts) — the JS SDK reaches
+          // Transcribe streaming over a PRESIGNED WEBSOCKET, which is a
+          // SEPARATE IAM action from the HTTP/2 `transcribe:StartStream-
+          // Transcription` the Node SDK uses. These credentials are ONLY
+          // ever used from the browser (the whole media path is
+          // browser-direct), so only the WebSocket form is granted and the
+          // HTTP/2 form is deliberately withheld — the scope matches
+          // exactly what runs. (Missed in the first OQ-8 pass because the
+          // functional check exercised the Node HTTP/2 action; see
+          // docs/DECISIONS.md and scripts/verify-oq8.ts.)
+          "transcribe:StartStreamTranscriptionWebSocket",
         ],
         // Neither action supports resource-level permissions; "*" is the
         // only valid resource. The scope is the action list itself.
