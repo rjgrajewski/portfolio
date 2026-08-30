@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   ConversationStatus,
 } from "../../agent/useConversation";
+import { TRUNCATED_ANSWER_NOTE } from "../../agent/degradation";
 
 interface TranscriptProps {
   messages: ChatMessage[];
@@ -72,6 +73,11 @@ export function Transcript({ messages, status }: TranscriptProps) {
                 ) : null}
               </p>
             )}
+            {m.truncated ? (
+              <p className="text-small italic text-neutral-500">
+                {TRUNCATED_ANSWER_NOTE}
+              </p>
+            ) : null}
           </div>
         );
       })}

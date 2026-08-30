@@ -29,6 +29,10 @@ export interface ChatMessage {
   id: string;
   role: "user" | "agent";
   text: string;
+  /** Set on an agent message whose streamed answer ended on an error /
+   * dropped connection — the transcript shows it was cut short. Kept as a
+   * flag, never folded into `text`, so it never enters the model history. */
+  truncated?: boolean;
 }
 
 export interface UseConversation {
@@ -63,6 +67,12 @@ export function useConversation(): UseConversation {
   const setAgentMessageText = useCallback((id: string, text: string) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, text } : m)),
+    );
+  }, []);
+
+  const markTruncated = useCallback((id: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, truncated: true } : m)),
     );
   }, []);
 
@@ -116,7 +126,11 @@ export function useConversation(): UseConversation {
               sawTerminal = true;
               setErrorCode((frame.code as ErrorCode) ?? "internal");
               setStatus("error");
-              if (!sawText) {
+              if (sawText) {
+                // Partial answer already on screen — keep it, flag it as
+                // cut short. The banner (AgentPanel) carries the "why".
+                markTruncated(agentId);
+              } else {
                 setAgentMessageText(
                   agentId,
                   typeof frame.message === "string" ? frame.message : "",
@@ -131,7 +145,10 @@ export function useConversation(): UseConversation {
               err instanceof AgentTransportError ? "network" : "internal";
             setErrorCode(code);
             setStatus("error");
-            if (!sawText) {
+            if (sawText) {
+              // Connection dropped mid-answer — keep what arrived, flag it.
+              markTruncated(agentId);
+            } else {
               setAgentMessageText(
                 agentId,
                 "The assistant is unavailable right now. Browse the portfolio below or download the CV.",
@@ -147,7 +164,7 @@ export function useConversation(): UseConversation {
         }
       })();
     },
-    [messages, appendToAgentMessage, setAgentMessageText],
+    [messages, appendToAgentMessage, setAgentMessageText, markTruncated],
   );
 
   const stop = useCallback(() => {

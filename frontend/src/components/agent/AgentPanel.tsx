@@ -1,6 +1,6 @@
 import { isAgentConfigured } from "../../config/runtime";
 import { useConversation } from "../../agent/useConversation";
-import type { ErrorCode } from "../../agent/transport";
+import { deriveDegradation } from "../../agent/degradation";
 import { Transcript } from "./Transcript";
 import { Composer } from "./Composer";
 
@@ -10,31 +10,25 @@ const STARTERS = [
   "How was this portfolio built?",
 ];
 
-const ERROR_COPY: Record<ErrorCode, string> = {
-  session_cap:
-    "You've reached the message limit for this session. Reload the page to start a fresh one — or browse the portfolio below.",
-  throttled: "That was a lot at once. Give it a few seconds and try again.",
-  breaker_tripped:
-    "The assistant has hit its usage limit for today and is paused. The portfolio below and the CV download still work.",
-  upstream_error:
-    "The assistant's model backend is momentarily unavailable. Try again shortly, or browse the portfolio below.",
-  network:
-    "Couldn't reach the assistant. Check your connection and try again, or browse the portfolio below.",
-  internal:
-    "Something went wrong answering that. Try again, or browse the portfolio below.",
-};
-
 /**
  * The agent panel — lives in the agent zone (AgentZone.tsx). Text input, a
  * streamed transcript, and a "thinking" state (docs/ROADMAP.md § Phase 2).
- * When the backend isn't wired (`VITE_AGENT_URL` unset) it shows the
- * unavailable state and the manual portfolio carries the experience
- * (docs/ARCHITECTURE.md § Graceful degradation).
+ *
+ * Availability is not decided here — `deriveDegradation` (agent/degradation.ts)
+ * is the single source of truth (docs/ROADMAP.md § Phase 6). This component
+ * just renders its verdict: an unavailable notice when the backend isn't
+ * wired, an inline banner when a turn failed, and — either way — the manual
+ * portfolio + CV keep working, which the copy points at.
  */
 export function AgentPanel() {
   const { messages, status, errorCode, canSend, send, stop } = useConversation();
+  const degradation = deriveDegradation({
+    configured: isAgentConfigured,
+    errorCode,
+  });
   const busy = status === "thinking" || status === "streaming";
   const isEmpty = messages.length === 0;
+  const inputEnabled = canSend && degradation.canRetry;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -48,11 +42,9 @@ export function AgentPanel() {
         </p>
       </div>
 
-      {!isAgentConfigured ? (
+      {degradation.mode === "unconfigured" ? (
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-4 text-small text-neutral-400">
-          The assistant is unavailable right now. Browse the portfolio below
-          or download the CV &mdash; everything about Rafal&rsquo;s work is
-          there too.
+          {degradation.notice}
         </div>
       ) : (
         <>
@@ -65,7 +57,7 @@ export function AgentPanel() {
                     <button
                       type="button"
                       onClick={() => send(q)}
-                      disabled={!canSend}
+                      disabled={!inputEnabled}
                       className="w-full rounded-lg border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-left text-small text-neutral-300 transition-colors hover:border-neutral-700 hover:text-neutral-100 disabled:opacity-50"
                     >
                       {q}
@@ -78,17 +70,17 @@ export function AgentPanel() {
             <Transcript messages={messages} status={status} />
           )}
 
-          {status === "error" && errorCode ? (
+          {degradation.notice ? (
             <p
               role="status"
               className="mt-3 rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-small text-neutral-400"
             >
-              {ERROR_COPY[errorCode]}
+              {degradation.notice}
             </p>
           ) : null}
 
           <Composer
-            canSend={canSend}
+            canSend={inputEnabled}
             busy={busy}
             onSend={send}
             onStop={stop}
