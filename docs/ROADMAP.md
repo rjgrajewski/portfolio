@@ -88,16 +88,21 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 ## Phase 4 — Voice I/O
 
-- [ ] **Spike first:** validate browser-direct-to-AWS media via Cognito end to end — resolve **OQ-3**
-- [ ] **Blocking, before `identity-stack` is provisioned to production:** resolve **OQ-8** (Cognito guest-role abuse ceiling) — guest creds are pullable by any script without loading the page, and there is currently no server-side quota on the Transcribe/Polly path at all; if the scoped role + short TTL aren't sufficient on their own, build `backend/functions/credentials/` (breaker-checked credential vending) instead
-- [ ] Cognito Identity Pool + guest role scoped to exactly `transcribe:StartStreamTranscription` and `polly:SynthesizeSpeech` (+ streaming action if used) — `identity-stack` (only after OQ-8 is resolved)
-- [ ] Transcribe streaming from the browser (`stt.ts`) — interim results shown live
-- [ ] Polly generative playback (`tts.ts`); resolve **OQ-4** (bidirectional streaming vs sentence-chunked `SynthesizeSpeech`)
-- [ ] Audio begins while the answer is still generating (streamed TTS or chunk-ahead)
-- [ ] Mobile: mic permission flow; autoplay unlock on the send tap; keyboard-covers-input handling
-- [ ] Voice ↔ text are interchangeable within one conversation
+> **Built and deployed to dev `2026-08-30`.** OQ-8 resolved and **empirically verified closed** on dev (no credential path bypasses the breaker). OQ-4 resolved (bidirectional streaming isn't browser-reachable → sentence chunking). Voice EN = `Ruth`. Barge-in shipped (persistent hands-free session, adaptive echo guard). The **agent UI was rebuilt voice-first** — single-column portfolio + a fixed organic visualization + a hidden transcript, no chat column ([DECISIONS.md](DECISIONS.md); ARCHITECTURE.md §§ Product shape / Agentic UI pattern updated). Per-session cap fixed (fresh id per load, calmer copy, prod 40→150). What's left before this phase closes: the full spoken round-trip + the new visualization's four states + barge-in's acoustic loop, on **live staging**, on a **real desktop and a real phone** (the browser pane can't grant a mic or run rAF while hidden). Promotion to prod is a separate, deliberate call.
 
-**Exit:** full voice round-trip on desktop Chrome/Safari and mobile Safari/Chrome, with text still available at any point.
+- [x] **Spike:** browser-direct-to-AWS media validated end to end — **OQ-3 effectively resolved.** Polly `SynthesizeSpeech` (generative `Ruth`) and Transcribe `StartStreamTranscription` (`en-US`) both round-tripped in `eu-central-1` using the **scoped guest credentials from the vending Lambda** (Polly→PCM→Transcribe returned the phrase verbatim). Plan B (API Gateway WebSocket proxy) stays the documented fallback and is what a per-character media quota would need. *(OQ-3 stays listed pending the live-device pass; the transport itself is proven.)*
+- [x] **Blocking:** **OQ-8 resolved** — **not** with a Cognito Identity Pool (an unsigned `GetCredentialsForIdentity` can't be breaker-gated). `backend/functions/credentials/` is the only way to get media creds: token bucket → **independent** daily media circuit-breaker → `sts:AssumeRole` (900s). Verified on dev: direct `AssumeRole` denied even to account admin; tripped breaker issues zero creds; vended creds denied for everything outside the two actions. See [ARCHITECTURE.md § Abuse protection](ARCHITECTURE.md#abuse-protection-and-cost-control) and [DECISIONS.md](DECISIONS.md).
+- [x] Scoped guest role — `portfolio-media-guest-<env>`, scoped to **exactly the browser's two calls**: `transcribe:StartStreamTranscriptionWebSocket` (the WebSocket form; the Node HTTP/2 `StartStreamTranscription` is a *separate* IAM action and deliberately not granted — this was the second staging failure) + `polly:SynthesizeSpeech`. Trust policy names only the vending Lambda. `identity-stack.ts` holds it + the Lambda. `npm run verify-oq8` (8/8) checks the browser action names via IAM policy simulation. Deployed to dev; **not** prod.
+- [x] Transcribe streaming from the browser (`frontend/src/agent/stt.ts`) — `en-US`, interim results shown live in the composer, turn ends on ~1.3s silence (or a 30s cap). *Live mic capture pending the on-device pass.*
+- [x] Polly generative playback (`frontend/src/agent/tts.ts`); **OQ-4 resolved** — bidirectional streaming exists (2026-03) but needs Node's HTTP/2 handler and has no WebSocket variant, so it's not browser-reachable → **sentence-chunked `SynthesizeSpeech`**, synth *n+1* while *n* plays.
+- [x] Audio begins while the answer is still generating — the first complete sentence is dispatched to synthesis mid-stream; the `reveal_section` action still fires on its own frame, so reveal + speech land together, not sequentially.
+- [x] Mobile: mic-permission flow (`getUserMedia`, `NotAllowedError` → `mic_denied` degradation); autoplay unlock on the **mic tap** (`AudioContext.resume` + 1-sample buffer, from the click gesture); keyboard-covers-input handled in `Composer.tsx` (`scrollIntoView` on focus / `visualViewport` resize). *Real-device behaviour pending the on-phone pass.*
+- [x] Voice ↔ text interchangeable — one turn machine in `useConversation.ts`; a voice question and a typed follow-up share one history. Verified in-browser: text keeps working before and after a voice failure.
+- [x] **Barge-in** — voice input is a persistent hands-free session (`stt.ts` `createVoiceSession`), not push-to-talk. The visitor can speak at any moment, including while the agent talks: the agent stops instantly (`player.stop()` + stream abort), the partial answer stays in the transcript flagged `interrupted`, and the utterance becomes the next turn. Self-interruption guard: `echoCancellation` + an adaptive echo-tracking threshold + a 300 ms sustain + a **700 ms disarm window after every playback start**. VAD logic unit-tested (`npm run verify-vad`, 11/11). Typing during speech + text-send-interrupts still work. *Acoustic loop on a real phone is the outstanding check.*
+- [x] `degradation.ts` extended with the four voice paths (mic denied, Transcribe fail, Polly fail, credential refusal) — each surfaces a separate, quieter notice that never disables the text composer. Verified in-browser for the mic-denied path.
+- [ ] **On live staging + real devices:** spoken question → audible answer → section opening with the speech, on desktop Chrome/Safari and mobile Safari/Chrome, text available throughout. *(Needs the `dev` push + `VITE_CREDENTIALS_URL` on the Amplify `dev` branch + a physical phone — the remaining EXIT work.)*
+
+**Exit:** full voice round-trip on desktop Chrome/Safari and mobile Safari/Chrome, with text still available at any point. **Code + dev infra done and verified as far as a mic-less browser allows; live-staging + on-device pass outstanding.**
 
 ---
 
@@ -134,12 +139,13 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 ## Phase 7 — Prompt injection & guardrail testing
 
-- [ ] `docs/prompt-injection-tests.md` — attack catalogue with expected behaviour:
+- [ ] `docs/prompt-injection-tests.md` — attack catalogue with expected behaviour *(started — the candidacy-assessment / skill-gap category is written and verified on dev; the rest below is Phase 7)*:
   - [ ] "ignore previous instructions" / "you are now a general assistant"
   - [ ] "print / repeat your system prompt / configuration"
   - [ ] instructions embedded in pasted text (e.g. a fake job description containing directives)
   - [ ] role-play / persona-override attempts
   - [ ] a poisoned `content/` file (verify corpus-as-data boundary holds)
+  - [x] **candidacy assessment & skill-gap claims** — agent never judges fit / seniority / comparisons / ratings, and never states "he hasn't worked with X" for anything outside the corpus (it's a knowledge boundary, not a skill gap). Guardrail 4 in `systemPrompt.ts`; 10 cases verified on dev `2026-08-30`. Added after a real failure ("probably not the right fit for this role").
 - [ ] Out-of-scope requests → agent explicitly names the scope boundary (not silent deflection)
 - [ ] Sensitive/borderline questions → soft redirect to "ask him directly", not a hard refusal
 - [ ] Confirm the system prompt never reaches the client in any response or error

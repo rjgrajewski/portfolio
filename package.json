@@ -8,13 +8,17 @@
   "workspaces": [
     "frontend",
     "backend/infra",
-    "backend/functions/agent"
+    "backend/functions/agent",
+    "backend/functions/credentials"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=frontend",
     "synth": "npm run synth --workspace=backend/infra",
     "check-availability": "tsx scripts/check-availability.ts",
     "verify-parallel-tools": "tsx scripts/verify-parallel-tools.ts",
+    "verify-resampler": "tsx scripts/verify-resampler.ts",
+    "verify-vad": "tsx scripts/verify-vad.ts",
+    "verify-oq8": "tsx scripts/verify-oq8.ts",
     "estimate-cost": "tsx scripts/estimate-cost.ts",
     "content:sync": "tsx scripts/sync-content.ts"
   },

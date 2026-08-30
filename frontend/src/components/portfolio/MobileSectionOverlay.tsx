@@ -69,7 +69,8 @@ export function MobileSectionOverlay() {
       role="dialog"
       aria-modal="true"
       aria-label={meta.title}
-      className="fixed inset-0 z-40 flex flex-col bg-neutral-950 lg:hidden"
+      style={{ zIndex: "var(--z-section-takeover)" }}
+      className="fixed inset-0 flex flex-col bg-neutral-950 lg:hidden"
     >
       <div className="flex items-center border-b border-neutral-900 px-4 py-3">
         <button
@@ -82,7 +83,9 @@ export function MobileSectionOverlay() {
         </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-8">
+      {/* pb-40: the agent visualization now floats ABOVE this takeover
+          (docs/DECISIONS.md), so leave room for it under the content. */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-40 pt-8">
         <h2 className="text-h2 text-neutral-50">{meta.title}</h2>
         <div className="mt-5 text-body text-neutral-300">
           <Content />

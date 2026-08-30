@@ -1,15 +1,13 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * `true` at >= 1024px — the same breakpoint as Tailwind's `lg:` and the
- * `.app-layout` grid switch in styles/index.css.
+ * `true` at >= 1024px — the same breakpoint as Tailwind's `lg:`.
  *
- * The two-zone layout switch itself is CSS-only on purpose (see
- * docs/DECISIONS.md). This hook exists for the one thing CSS can't express:
- * the mobile section reveal is a full-screen takeover (a separately-rendered
+ * The mobile section reveal is a full-screen takeover (a separately-rendered
  * overlay), the desktop one is an in-place accordion — different component
  * trees, chosen from the same `activeSectionStore` state, not a second
- * source of truth.
+ * source of truth. The agent dock also uses it to decide whether an
+ * expanded transcript may cover the screen.
  */
 const QUERY = "(min-width: 1024px)";
 

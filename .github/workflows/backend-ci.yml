@@ -18,10 +18,11 @@ jobs:
 
       - run: npm ci
 
-      # Type-check the reasoning Lambda. esbuild (via cdk synth below) strips
-      # types without checking them, so this is the only gate on the
-      # function's type correctness.
+      # Type-check the Lambdas. esbuild (via cdk synth below) strips types
+      # without checking them, so this is the only gate on the functions'
+      # type correctness. Both share backend/functions/shared/.
       - run: npm run typecheck --workspace=@portfolio/agent-fn
+      - run: npm run typecheck --workspace=@portfolio/credentials-fn
 
       # cdk synth — no AWS credentials needed (env is a fixed account/region
       # in backend/infra/lib/config.ts, no context lookups). This also runs

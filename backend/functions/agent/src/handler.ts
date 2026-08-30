@@ -490,7 +490,7 @@ async function runTurn(
     if (cap.capped) {
       throw new Guard(
         "session_cap",
-        "You've reached the message limit for this session. Reload the page to start a fresh one.",
+        "That's a good run of questions for one visit. Reload the page whenever you want to keep going.",
       );
     }
 

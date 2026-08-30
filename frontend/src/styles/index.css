@@ -3,6 +3,26 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * The one place z-index is decided. Everything positioned in this app
+   * reads a name from here — no scattered magic numbers.
+   *
+   *   content            0 (auto)   portfolio sections, footer
+   *   --z-header         20         sticky header
+   *   --z-section-takeover 40       mobile full-screen section reveal
+   *   --z-ai-frame       50         AI-mode frame — ABOVE the takeover, so
+   *                                 the agent is visibly present while a
+   *                                 section it opened is on screen
+   *   --z-agent-dock     60         the visualization + transcript bar —
+   *                                 always the top layer during a conversation
+   */
+  :root {
+    --z-header: 20;
+    --z-section-takeover: 40;
+    --z-ai-frame: 50;
+    --z-agent-dock: 60;
+  }
+
   html {
     scroll-behavior: smooth;
   }
@@ -39,64 +59,66 @@
 
 @layer components {
   /*
-   * Desktop two-zone layout (docs/ARCHITECTURE.md § Product shape / §
-   * Frontend). A plain CSS Grid switch, not a second DOM tree: below
-   * 1024px this is inert (normal block flow, page scrolls as one column,
-   * unchanged from Phase 1). At 1024px+ it becomes a 3-row grid — header,
-   * a compact intro strip, then a fixed-height row holding the two
-   * independently-scrolling zones — and the whole page stops scrolling as
-   * a unit.
+   * Single-column portfolio (docs/ARCHITECTURE.md § Product shape,
+   * rewritten). The whole screen is the portfolio; the agent is present
+   * through the fixed visualization + this frame, not by occupying a
+   * column. The old desktop two-zone chat grid is gone.
    *
-   * grid-area placement is deliberately decoupled from DOM order: the
-   * agent zone markup comes BEFORE the content zone in the tree (so the
-   * mobile stacking order — intro, agent teaser, portfolio sections —
-   * matches Phase 1 exactly), while on desktop grid-template-areas puts
-   * content on the left and the agent zone on the right. Source order for
-   * keyboard/screen-reader users stays the sensible one on both
-   * breakpoints; only the desktop *visual* position is reassigned.
-   *
-   * 1024px matches Tailwind's `lg:` breakpoint used everywhere else in
-   * these components (e.g. the mobile-only "Browse manually" button) —
-   * one breakpoint value, so nothing can flip out of sync at the edge.
+   * Leave room at the bottom for the fixed agent dock so the footer is
+   * never permanently hidden behind it.
    */
-  .app-layout {
-    display: block;
+  .app-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* room for the fixed agent dock (viz + collapsed transcript bar) so the
+       footer is never permanently hidden behind it */
+    padding-bottom: 9.5rem;
   }
 
-  @media (min-width: 1024px) {
-    .app-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 380px;
-      grid-template-rows: auto auto minmax(0, 1fr);
-      grid-template-areas:
-        "header header"
-        "intro  intro"
-        "content agent";
-      height: 100vh;
-      height: 100dvh;
-      overflow: hidden;
-    }
-
-    .app-layout > .layout-header {
-      grid-area: header;
-    }
-
-    .app-layout > .layout-intro {
-      grid-area: intro;
-    }
-
-    .app-layout > .layout-agent {
-      grid-area: agent;
-      min-height: 0;
-      overflow-y: auto;
-      overscroll-behavior-y: contain;
-    }
-
-    .app-layout > .layout-content {
-      grid-area: content;
-      min-height: 0;
-      overflow-y: auto;
-      overscroll-behavior-y: contain;
-    }
+  /*
+   * AI-mode glow — amber light spilling in from every screen edge while the
+   * agent is active, fading gently toward the centre. NO hard line. This is
+   * a state signal, not decoration: it is the main thing that tells a
+   * visitor "a conversation is live" vs. "the orb is waiting for a tap"
+   * (the orb at rest and listening-in-silence look alike on their own), so
+   * it is deliberately strong — calm but not missable at arm's length on a
+   * phone.
+   *
+   * Rendered ABOVE the mobile section takeover so the agent stays present
+   * over a section it opened. `translateZ(0)` keeps it a stable iOS
+   * compositing layer. Its opacity is driven per-frame by AgentOverlay
+   * (slow breathe + a lift with mic/playback amplitude) so it reads as one
+   * system with the orb; `--ai-glow` is that live value, with a static
+   * fallback for the first paint / reduced motion.
+   */
+  .ai-frame {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-ai-frame);
+    pointer-events: none;
+    transform: translateZ(0);
+    opacity: var(--ai-glow, 0.82);
+    /* A radial vignette so the light is an EDGE effect that fades to clean
+       in the centre — it scales with the viewport aspect (unlike a blur,
+       which overlaps across a narrow phone). Plus a tight bright rim right
+       at the edge from the box-shadow. */
+    background: radial-gradient(
+      ellipse 118% 112% at 50% 50%,
+      transparent 46%,
+      rgba(232, 163, 61, 0.15) 78%,
+      rgba(232, 163, 61, 0.4) 100%
+    );
+    box-shadow: inset 0 0 42px 0 rgba(242, 182, 88, 0.32);
   }
+  .ai-frame[data-viz="listening"],
+  .ai-frame[data-viz="speaking"] {
+    background: radial-gradient(
+      ellipse 118% 112% at 50% 50%,
+      transparent 43%,
+      rgba(232, 163, 61, 0.24) 74%,
+      rgba(242, 182, 88, 0.6) 100%
+    );
+    box-shadow: inset 0 0 54px 0 rgba(242, 182, 88, 0.52);
+  }
+
 }

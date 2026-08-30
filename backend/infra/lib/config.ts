@@ -38,12 +38,35 @@ export interface EnvConfig {
   readonly dailyCircuitBreakerThreshold: number;
 
   /**
+   * Daily MEDIA circuit-breaker threshold (docs/ARCHITECTURE.md § Abuse
+   * protection and cost control — the OQ-8 fix) — number of short-lived
+   * Polly/Transcribe credential grants the vending Lambda
+   * (backend/functions/credentials/) will issue per UTC day before it
+   * refuses. A SEPARATE counter from `dailyCircuitBreakerThreshold` above:
+   * abusing voice must not be able to disable the text agent, or vice
+   * versa.
+   *
+   * Sizing: a real voice visitor needs ~1 grant per 15 min of active
+   * conversation (creds re-vend on expiry), so an interview is 2-4 grants.
+   * The abuse bound this gives is "at most `threshold` fresh 15-min
+   * credential windows per day" — Polly generative's low per-account TPS
+   * quota bounds throughput inside each window, and the $25 AWS Budget
+   * alarm is the hard backstop. This is bounded, not eliminated; full
+   * elimination would need a media proxy (plan B — deferred).
+   */
+  readonly mediaBreakerThreshold: number;
+
+  /**
    * Per-session message cap (docs/ARCHITECTURE.md § Abuse protection) —
    * hard cap on exchanges per client-generated `sessionId`. NOT an abuse
-   * control (the id is trivially rotated); this only bounds *accidental*
-   * overuse, e.g. a browser tab stuck in a retry loop. Kept per-env for the
-   * same reason as the breaker threshold: dev can be tight, prod is looser
-   * so a genuine back-and-forth in an interview never hits it.
+   * control (the id is client-side and now regenerates on every page load —
+   * see frontend/src/agent/sessionId.ts). Its only job is to stop ONE stuck
+   * page view (a runaway retry loop) from hammering the endpoint; the
+   * in-function token bucket and the daily circuit-breaker are the real
+   * cost bounds. So it is set generously — well above any real
+   * back-and-forth (a genuinely engaged recruiter can go deep for a long
+   * time) — since a tight value buys no security and only risks cutting off
+   * the right person mid-conversation.
    */
   readonly sessionMessageCap: number;
 
@@ -64,7 +87,13 @@ const dev: EnvConfig = {
   region: "eu-central-1",
   bedrockModelId: "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
   dailyCircuitBreakerThreshold: 200,
-  sessionMessageCap: 20,
+  // Was 50 — too tight to iterate on: one day of voice work + on-device
+  // checks re-vends on every page load (creds are memory-only) and trips it,
+  // which reads as "voice is broken". 200 matches the dev reasoning breaker;
+  // Polly TPS quota + the $25 AWS Budget alarm are still the hard backstops,
+  // and the dev Function URL is CORS-scoped + unadvertised. Prod stays 120.
+  mediaBreakerThreshold: 200,
+  sessionMessageCap: 60,
   allowedOrigins: [
     "http://localhost:5173",
     "https://dev.daz9bpic9q3nd.amplifyapp.com",
@@ -77,7 +106,14 @@ const prod: EnvConfig = {
   // Higher than dev on purpose — see the Monday dry-run check in
   // docs/ROADMAP.md: this must not trip during the actual interview demo.
   dailyCircuitBreakerThreshold: 500,
-  sessionMessageCap: 40,
+  // ~30-60x a single interview's grant count; still caps a scripted abuser
+  // to `mediaBreakerThreshold` fresh 15-min credential windows per UTC day.
+  mediaBreakerThreshold: 120,
+  // Deep-dive-friendly: a genuinely engaged recruiter asking follow-ups
+  // (business layer, then technical, per project, across four projects +
+  // STAR stories) can easily pass 40. The daily breaker (500) is the real
+  // bound; this only stops a stuck tab. Reload starts fresh.
+  sessionMessageCap: 150,
   allowedOrigins: ["https://main.daz9bpic9q3nd.amplifyapp.com"],
 };
 
