@@ -55,6 +55,40 @@ back verbatim). So the exact browser-direct call path is proven.
 
 ---
 
+## STT sample-rate fix (2026-08-30)
+
+First staging test: Transcribe accepted the WebSocket handshake (101) then
+killed the session with a non-retryable error — "the audio doesn't match the
+parameters you provided". Cause: the request declares `sample-rate=16000`,
+but the first `stt.ts` captured at the `AudioContext`'s native rate
+(44100/48000 on Safari — the `getUserMedia` `{sampleRate:16000}` constraint
+is advisory and Safari ignores it) and only did a crude per-`ScriptProcessorNode`-
+block decimation with no state across blocks. Approximately-16 kHz with
+boundary discontinuities ≠ the declared contract.
+
+Fix (`frontend/src/agent/pcmChunker.ts` + rewritten `stt.ts`):
+
+- `new AudioContext({ sampleRate: 16000 })` — the reliable request (still not
+  guaranteed), and the actual `audioContext.sampleRate` is logged to the
+  console at capture start so a future staging run shows what the browser
+  did.
+- An **AudioWorklet** resamples continuously to exactly 16 kHz — linear
+  interpolation with the fractional read position and the unconsumed input
+  tail carried across every 128-frame quantum, so there is no block-boundary
+  artifact; pass-through when the context is already 16 kHz. Chosen over
+  `OfflineAudioContext` (which renders fixed-length buffers → one instance
+  per block, async in the hot path, and no resampler state between blocks —
+  the artifact returns) and over keeping `ScriptProcessorNode` (deprecated,
+  main-thread, unreliable on Safari 26).
+- Output is signed 16-bit little-endian mono PCM, batched to 100 ms / 3200-
+  byte chunks (Transcribe streaming's preferred size).
+- `scripts/verify-resampler.ts` (`npm run verify-resampler`) proves it in
+  Node against 48k/44.1k/16k inputs: duration preserved to <0.5%, 440 Hz
+  tone stays 440 Hz, valid s16le, and the generated worklet string parses.
+  11/11.
+
+Still needs the live mic pass on staging (Safari 26 desktop + phone).
+
 ## OQ-4 — Polly bidirectional streaming. Resolved 2026-08-30: not browser-reachable → sentence chunking.
 
 **Finding.** Amazon Polly shipped a real bidirectional streaming API,

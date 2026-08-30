@@ -16,6 +16,7 @@
     "synth": "npm run synth --workspace=backend/infra",
     "check-availability": "tsx scripts/check-availability.ts",
     "verify-parallel-tools": "tsx scripts/verify-parallel-tools.ts",
+    "verify-resampler": "tsx scripts/verify-resampler.ts",
     "estimate-cost": "tsx scripts/estimate-cost.ts",
     "content:sync": "tsx scripts/sync-content.ts"
   },
