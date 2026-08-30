@@ -107,6 +107,23 @@ Fix: `portfolio-media-guest-<env>` now grants
 same trap — Polly synth has no WebSocket/streaming action variant, so it was
 already correct. Regression guard: `npm run verify-oq8`.
 
+## TTS never ran — the stop latch (2026-08-30)
+
+Third staging test: input voice worked, the agent answered, but **zero
+Polly traffic** and no error. `createSpeechPlayer`'s `stop()` set a
+`stopped` flag that nothing ever cleared, and `useConversation.runTurn`
+called `player.stop()` at the top of every turn — so by the first text
+frame the synth path was latched off. The mic-less pane never exercised it
+(`runTurn({speak:true})` is only reached after a real transcript).
+
+Fix: a spoken answer is now an explicit **utterance** — `begin()` halts
+prior playback and re-arms the player; `runTurn` calls `begin()` (not
+`stop()`) for a spoken turn; an epoch counter drops late Polly/decode
+results from a superseded utterance. `[tts] …` / `[voice] …` console logging
+was added so the next regression is visible, not inferred. Verified from a
+real browser end to end (begin → chunk → Polly → decode → schedule →
+onStart/onIdle) — see DECISIONS.md.
+
 ## OQ-4 — Polly bidirectional streaming. Resolved 2026-08-30: not browser-reachable → sentence chunking.
 
 **Finding.** Amazon Polly shipped a real bidirectional streaming API,

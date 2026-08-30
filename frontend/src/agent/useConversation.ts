@@ -155,10 +155,18 @@ export function useConversation(): UseConversation {
       setErrorCode(null);
       setStatus("thinking");
 
-      const player = opts.speak ? getPlayer() : null;
-      // A fresh spoken turn cancels any lingering playback from the last one.
-      player?.stop();
-      if (opts.speak) setVoiceErrorCode(null);
+      // Spoken turn: begin() a fresh utterance (halts any prior playback AND
+      // clears the stop latch so push()/end() below actually run). A text
+      // turn just silences any audio still playing.
+      let player: SpeechPlayer | null = null;
+      if (opts.speak) {
+        player = getPlayer();
+        player.begin();
+        setVoiceErrorCode(null);
+      } else {
+        playerRef.current?.stop();
+      }
+      console.info(`[voice] runTurn speak=${opts.speak} chars=${text.length}`);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -249,12 +257,15 @@ export function useConversation(): UseConversation {
     if (runtimeConfig.credentialsUrl === null) return;
 
     // The mic press is our user gesture — unlock playback for the reply.
+    // Do NOT stop the player here: runTurn(speak:true) calls begin() when the
+    // transcript arrives, which halts prior playback and re-arms the player.
+    // Calling stop() now would latch it inert before begin() runs.
     void getPlayer().unlock();
-    playerRef.current?.stop();
 
     setVoiceErrorCode(null);
     setPartialTranscript("");
     setListening(true);
+    console.info("[voice] listening…");
 
     recognizerRef.current = startListening({
       onPartial: (t) => setPartialTranscript(t),
@@ -263,6 +274,7 @@ export function useConversation(): UseConversation {
         setListening(false);
         setPartialTranscript("");
         const clean = t.trim();
+        console.info(`[voice] transcript final (${clean.length} chars): ` + JSON.stringify(clean.slice(0, 100)));
         if (clean.length > 0) runTurn(clean, { speak: true });
       },
       onError: (code, message) => {

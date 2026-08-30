@@ -8,12 +8,22 @@
  * SDK, but its request-side event stream needs Node's HTTP/2 handler —
  * browsers can't open raw HTTP/2 from JS and there is no WebSocket variant
  * (unlike Transcribe). So it is NOT reachable browser-direct. This module
- * uses the sentence-chunked `SynthesizeSpeech` fallback the architecture
- * already anticipated: as the reasoning stream produces text, complete
- * sentences are cut off and synthesised; sentence n+1 is synthesised while
- * sentence n plays. First audio starts the moment the first sentence's MP3
- * decodes — while the answer is still streaming. Decision recorded in
- * docs/DECISIONS.md.
+ * uses the sentence-chunked `SynthesizeSpeech` fallback: as the reasoning
+ * stream produces text, complete sentences are cut off and synthesised;
+ * sentence n+1 is synthesised while sentence n plays. First audio starts the
+ * moment the first sentence's MP3 decodes — while the answer is still
+ * streaming.
+ *
+ * LIFECYCLE — a spoken answer is one "utterance":
+ *   begin()  — start a fresh utterance (halts any prior playback, clears the
+ *              per-utterance latch). MUST be called before push().
+ *   push()   — feed answer-text deltas.
+ *   end()    — no more text; synthesise whatever's buffered.
+ *   stop()   — hard halt (error / user switched to text / teardown). Unlike
+ *              begin()'s reset, stop() leaves the player inert until the
+ *              next begin().
+ * An earlier version had only stop(), whose latch was never cleared, so the
+ * synth path silently never ran (no Polly call, no error). begin() is the fix.
  *
  * Voice: `Ruth` (en-US generative) — see docs/voice-notes.md.
  *
@@ -36,12 +46,14 @@ export interface SpeechPlayer {
   /** Resume the AudioContext from inside a user gesture (mobile autoplay
    *  unlock). Safe to call repeatedly. */
   unlock(): Promise<void>;
+  /** Start a fresh spoken answer — halts any prior playback and clears the
+   *  stop latch. Call once, before the first push(). */
+  begin(): void;
   /** Feed a chunk of answer text as it streams in. */
   push(textDelta: string): void;
   /** No more text is coming — synthesise whatever's buffered. */
   end(): void;
-  /** Stop immediately, drop the queue (new turn / switched to text / user
-   *  hit stop). */
+  /** Hard halt: drop the queue, stop playback, stay inert until begin(). */
   stop(): void;
   /** True while audio is scheduled or playing. */
   isSpeaking(): boolean;
@@ -51,7 +63,7 @@ const VOICE_ID = "Ruth";
 const MAX_CLAUSE_CHARS = 180;
 
 // A complete sentence: run of non-terminators, then one or more terminators,
-// then optional closing quote/bracket, then trailing space.
+// then optional closing quote/bracket, then trailing whitespace.
 const SENTENCE_RE = /[^.!?…]+[.!?…]+["'”’)\]]*\s+/g;
 
 interface SpeechPlayerOptions {
@@ -67,10 +79,15 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
 
   let textBuf = "";
   let ended = false;
-  let stopped = false;
+  let stopped = true; // inert until begin()
+  /** Bumped by begin()/stop(); a synth loop or decode from an older
+   *  utterance checks this so a late Polly response can't play over a new
+   *  answer. */
+  let epoch = 0;
 
   const synthQueue: string[] = [];
   let synthRunning = false;
+  let sentenceNo = 0;
 
   const liveSources = new Set<AudioBufferSourceNode>();
   let nextStartAt = 0;
@@ -109,7 +126,7 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
     let consumed = 0;
     while ((m = SENTENCE_RE.exec(textBuf)) !== null) {
       const s = m[0].trim();
-      if (s) synthQueue.push(s);
+      if (s) enqueue(s);
       consumed = SENTENCE_RE.lastIndex;
     }
     if (consumed > 0) textBuf = textBuf.slice(consumed);
@@ -119,28 +136,38 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
     if (!final && textBuf.length > MAX_CLAUSE_CHARS) {
       const sp = textBuf.lastIndexOf(" ", MAX_CLAUSE_CHARS);
       if (sp > 20) {
-        synthQueue.push(textBuf.slice(0, sp).trim());
+        enqueue(textBuf.slice(0, sp).trim());
         textBuf = textBuf.slice(sp + 1);
       }
     }
 
     if (final) {
       const rest = textBuf.trim();
-      if (rest) synthQueue.push(rest);
+      if (rest) enqueue(rest);
       textBuf = "";
     }
 
     void runSynth();
   }
 
+  function enqueue(sentence: string): void {
+    synthQueue.push(sentence);
+    console.info(
+      `[tts] queued sentence #${++sentenceNo} (${sentence.length} chars): ` +
+        JSON.stringify(sentence.slice(0, 80)),
+    );
+  }
+
   async function runSynth(): Promise<void> {
     if (synthRunning || stopped) return;
+    const myEpoch = epoch;
     synthRunning = true;
     try {
-      while (synthQueue.length > 0 && !stopped) {
+      while (synthQueue.length > 0 && !stopped && epoch === myEpoch) {
         const sentence = synthQueue.shift()!;
         let bytes: Uint8Array;
         try {
+          console.info(`[tts] synth → Polly (${VOICE_ID}, generative): ` + JSON.stringify(sentence.slice(0, 80)));
           const c = await client();
           const res = await c.send(
             new SynthesizeSpeechCommand({
@@ -152,7 +179,9 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
           );
           if (!res.AudioStream) throw new Error("empty AudioStream");
           bytes = await res.AudioStream.transformToByteArray();
+          console.info(`[tts] Polly ok: ${bytes.byteLength} bytes mp3`);
         } catch (err) {
+          console.warn("[tts] Polly failed", err);
           clearMediaCredentials();
           if (err instanceof MediaCredentialError) {
             fail("credentials_refused", err.message);
@@ -162,7 +191,7 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
           return;
         }
 
-        if (stopped) return;
+        if (stopped || epoch !== myEpoch) return;
         try {
           const audioCtx = getCtx();
           // Copy into a fresh, standalone ArrayBuffer — the SDK's Uint8Array
@@ -170,15 +199,15 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
           const ab = new ArrayBuffer(bytes.byteLength);
           new Uint8Array(ab).set(bytes);
           const buf = await audioCtx.decodeAudioData(ab);
-          if (!stopped) schedule(buf);
-        } catch {
+          if (!stopped && epoch === myEpoch) schedule(buf);
+        } catch (err) {
           // A single undecodable chunk shouldn't kill the whole answer.
-          // Skip it and keep going.
+          console.warn("[tts] decodeAudioData failed for one chunk — skipping", err);
         }
       }
     } finally {
       synthRunning = false;
-      if (synthQueue.length > 0 && !stopped) void runSynth();
+      if (synthQueue.length > 0 && !stopped && epoch === myEpoch) void runSynth();
     }
   }
 
@@ -191,11 +220,16 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
     const startAt = Math.max(audioCtx.currentTime + 0.02, nextStartAt);
     src.start(startAt);
     nextStartAt = startAt + buf.duration;
+    console.info(
+      `[tts] scheduled chunk: starts +${(startAt - audioCtx.currentTime).toFixed(2)}s, ` +
+        `dur ${buf.duration.toFixed(2)}s`,
+    );
 
     liveSources.add(src);
     src.onended = () => {
       liveSources.delete(src);
       if (liveSources.size === 0 && synthQueue.length === 0 && !synthRunning) {
+        console.info("[tts] idle (playback complete)");
         opts.onIdle?.();
       }
     };
@@ -212,8 +246,7 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
     opts.onError?.(code, message);
   }
 
-  function stop(): void {
-    stopped = true;
+  function haltPlayback(): void {
     synthQueue.length = 0;
     textBuf = "";
     for (const src of liveSources) {
@@ -226,6 +259,22 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
     }
     liveSources.clear();
     nextStartAt = 0;
+  }
+
+  function stop(): void {
+    epoch++;
+    stopped = true;
+    haltPlayback();
+  }
+
+  function begin(): void {
+    epoch++;
+    haltPlayback();
+    stopped = false;
+    ended = false;
+    announcedStart = false;
+    sentenceNo = 0;
+    console.info("[tts] begin (new spoken answer)");
   }
 
   return {
@@ -247,7 +296,9 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
       } catch {
         /* ignore */
       }
+      console.info(`[tts] unlock: AudioContext state = ${audioCtx.state}`);
     },
+    begin,
     push(delta: string) {
       if (stopped || ended) return;
       textBuf += delta;
@@ -256,6 +307,7 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
     end() {
       if (stopped || ended) return;
       ended = true;
+      console.info(`[tts] end (flush ${textBuf.length} buffered chars)`);
       cutSentences(true);
     },
     stop,
