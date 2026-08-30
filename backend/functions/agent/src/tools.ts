@@ -50,12 +50,13 @@ export const TOOLS: Tool[] = [
     toolSpec: {
       name: GET_CONTENT,
       description:
-        "Fetch one depth file about Rafal for a given topic and layer. Call " +
-        "this only when the visitor wants detail that goes beyond the " +
-        "one-line summaries already in your reference material. Business " +
-        "layer = problem solved and why it mattered; technical layer = " +
-        "stack, decisions, trade-offs. Do not mention that you are fetching " +
-        "anything — just answer.",
+        "Fetch one depth file about Rafal for a given topic and layer. Do " +
+        "NOT call this for a broad \"tell me about X\" — the one-line " +
+        "summaries in the reference material are enough. Call it only when " +
+        "the visitor asks for more: business = the product, the problem, " +
+        "traction; technical = stack, decisions, trade-offs. After a " +
+        "fetch, answer in a few sentences — do not recap the whole file. " +
+        "Do not mention that you are fetching anything — just answer.",
       inputSchema: {
         json: {
           type: "object",

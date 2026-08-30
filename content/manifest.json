@@ -7,7 +7,7 @@
       "title": "Education",
       "sectionId": "education",
       "layers": {
-        "business": "Rafal's CS degree (WSB Merito, Wroclaw, 2024) and the move from operations into engineering it formalised.",
+        "business": "CS degree with a Graphic Design specialization (WSB Merito, Wroclaw, 2024) — picked for the design; the coding-plus-Amazon-ops overlap is what pulled him into engineering.",
         "technical": "The fundamentals from it that still show up in how Rafal builds."
       }
     },
@@ -16,8 +16,8 @@
       "title": "Amazon",
       "sectionId": "amazon",
       "layers": {
-        "business": "Four roles in seven years — operations to workforce staffing to owning the analytics layer behind Europe-wide mass recruitment.",
-        "technical": "The Redshift / SQL / data-modelling / dashboard stack, and the forecasting and internal-tooling work before it."
+        "business": "Four roles in seven years — frontline HR (terminations) to staffing specialist then manager of three, to owning the Europe-wide recruitment analytics layer — building the process-fixing tools along the way.",
+        "technical": "Redshift / SQL / dashboards at European hiring scale, the Excel-to-SQL rebuild of the temporary-associate tenure tracker, and a document-compliance check against the EDM."
       }
     },
     {
@@ -25,8 +25,8 @@
       "title": "FlowJob",
       "sectionId": "flowjob",
       "layers": {
-        "business": "The problem flowjob.it solves — the skill profile as the filter — and where the product stands.",
-        "technical": "Argus and Minerva, the Bedrock skill-normalization pipeline, and the app around it, with the decisions behind each."
+        "business": "Started as a personal Python scraper, grown into an IT job-search product that uses the skill profile as the filter — live, unannounced, UI still the bottleneck.",
+        "technical": "The Fargate scraper, the Bedrock skill-normalization pipeline, and the app around it, with the decisions behind each."
       }
     },
     {
@@ -34,7 +34,7 @@
       "title": "This Portfolio",
       "sectionId": "portfolio-itself",
       "layers": {
-        "business": "Why this portfolio is built as a working agentic system, and the cost ceiling that shaped it.",
+        "business": "Why this portfolio is a working agentic system under a ~$25/month ceiling, and why it was built documentation-first — a lesson from shipping flowjob.it without docs.",
         "technical": "Bedrock Haiku 4.5, the agentic reveal UI, tool-fetch knowledge retrieval with no vector store, and the cost guardrails."
       }
     }

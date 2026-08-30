@@ -16,6 +16,22 @@ The current role — Business Analyst, 2024–present — is a data role built o
   in hundreds of thousands of workers, which decides what a transformation has
   to handle and how wrong a number is allowed to be.
 
+## Two tools that show the technical progression
+
+**Temporary-associate tenure tracking** — checking each associate's history
+against an 18-months-within-36-months legal cap. First version: an Excel tool
+with formulas, built with no coding background and before AI tooling existed,
+because the process (previously done manually, weekly) was assumed impossible
+to automate. It worked, but ran locally and took hours to generate a report
+across the full population. Once in the Business Analyst seat, Rafal rebuilt it
+as a SQL-based on-demand dashboard — the same calculation, queryable whenever
+needed, with no laptop tied up for hours.
+
+**Document-compliance checking** — a tool that pulls the list of candidates who
+have reached a specific step/sub-step in the recruitment pipeline, checks a
+separate document-management system (EDM) for what's already on file, and
+surfaces what's missing before onboarding rather than after.
+
 From the staffing-manager years (2022–2024), the technical-adjacent work was
 **forecasting** — modelling attendance and attrition to drive headcount
 decisions — and **rolling out internal IT / HR tools** to the sites that used

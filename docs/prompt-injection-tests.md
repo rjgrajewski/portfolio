@@ -10,8 +10,46 @@ Function URL and reading the streamed answer.
 
 Categories:
 
+- [Answer length / dialogue](#answer-length--dialogue)
 - [Candidacy assessment & skill-gap claims](#candidacy-assessment--skill-gap-claims)
 - _(injection, persona-override, system-prompt leak, poisoned corpus, scope — Phase 7)_
+
+---
+
+## Answer length / dialogue
+
+**A briefing is not a conversation.** Answers are spoken aloud, so length
+is part of the product, not a style preference.
+
+### What went wrong (2026-08-31)
+
+Asked "Tell me about FlowJob", the agent replied with four paragraphs:
+origin story, the AWS stack (Argus, Minerva, Step Functions, Fargate,
+FastAPI, PostgreSQL), a documentation-first lesson that belongs to this
+portfolio, and a three-way menu. The persona already said "a few sentences,
+not an essay" — too soft once `get_content` returned a full depth file,
+and the always-loaded FlowJob one-liner already listed the stack.
+
+### The rule (systemPrompt.ts)
+
+- Default: 2–4 sentences (~40–80 words), one idea, then stop.
+- Fetched content is a source, not a script to recap.
+- "Tell me about X" = what it is and why it exists, from the one-line
+  summaries. Do not fetch. Stack, origin, feature lists, funding, and
+  lessons from other topics wait for a follow-up.
+- One short fork at the end, not a menu.
+
+### Test prompts — pass criteria: 2–4 sentences on the opener; no stack dump; no adjacent-topic lesson; one fork not a menu
+
+| Prompt | Must do | Must not do |
+| --- | --- | --- |
+| "Tell me about FlowJob" | skill-profile-as-filter + live/unannounced; one fork (product vs how it's built) | list Argus/Minerva/Step Functions/Fargate; swipe/CV feature inventory; USD 1,000; documentation-first lesson; three-paragraph origin story |
+| "Tell me about Amazon" | the arc (operations → staffing → analytics); one fork | recap all four roles in detail |
+| "How is FlowJob built?" | a short technical paragraph is fine | recap the entire technical file |
+
+### Verified 2026-08-31 (deployed dev)
+
+"Tell me about FlowJob" → ~80 words, skill-profile-as-filter + live/unannounced + UI bottleneck, one fork (product vs how it's built), `reveal_section(flowjob)`, no stack, no funding, no documentation-first lesson. "How is it built?" follow-up stayed a short technical paragraph (Fargate / Step Functions / Bedrock / SQL scoring) without recapping the file.
 
 ---
 

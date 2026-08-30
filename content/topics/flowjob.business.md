@@ -1,9 +1,14 @@
 # flowjob.it — business layer
 
 flowjob.it is an IT job-search product Rafal Grajewski built for himself first.
-It is live and he uses it, but it has not been announced and has no real users.
-It has run as an evening project since October 2025 — a portfolio piece with
-commercial potential, not a business.
+It is live and he uses it, but it has not been announced and has no real users
+yet. It has run as an evening project since October 2025 — a portfolio piece
+with commercial potential, not a business.
+
+It didn't start as a product. Rafal set out to test his own Python skills —
+a scraper, and a database he could query for listings relevant to his own job
+search, nothing more. It grew into a real product with commercial potential
+once he got seriously into AI-assisted engineering and kept building on it.
 
 The idea: instead of another job board, put a **logical layer between the
 candidate and the listing**. Job ads become structured data — parsed,
@@ -41,14 +46,19 @@ The interface does not meet Rafal's bar — rough edges, and CV creation is
 awkward on a phone. The current work is a UI refactor. Security has no known
 hole, but there has been no audit yet; that is planned as the last step before
 launch, along with a finished legal layer. Privacy and cookie pages already
-exist.
+exist. The domain (flowjob.it) is public and easy to find on its own, so
+there's no attempt to hide that it's unfinished — the honest framing is "live,
+but not yet launched."
 
 ## Traction
 
-At AWS Summit Warsaw, Amazon backed the project with USD 1,000, with a path to
-more funding after launch once there is real traffic.
+Zero real users so far — expected, given it's deliberately unannounced. At AWS
+Summit Warsaw, Amazon backed the project with USD 1,000, with a path to more
+funding after launch once there is real traffic.
 
 The honest summary: the hardest problem already solved was making skill names
 from messy job ads consistent enough to match on; the hardest current fight is
-the UI. What Rafal says he would not do again is leave documentation until
-later — a habit he corrected on this portfolio.
+the UI.
+
+Ask for the technical layer for the architecture — Argus, Minerva, the
+Bedrock pipeline, and the app around it.

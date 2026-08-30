@@ -138,6 +138,7 @@ export class ApiStack extends Stack {
           beforeInstall: () => [],
           afterBundling: (_inputDir: string, outputDir: string) => [
             `cp -r "${contentDir}" "${path.join(outputDir, "content")}"`,
+            `find "${path.join(outputDir, "content")}" -name '.DS_Store' -delete`,
           ],
         },
       },

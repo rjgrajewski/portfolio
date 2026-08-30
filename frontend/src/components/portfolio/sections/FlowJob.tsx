@@ -56,11 +56,11 @@ export function FlowJob() {
           Technical
         </p>
         <p className="mt-1.5">
-          Three parts. <strong className="font-medium text-neutral-100">Argus</strong>,
-          a Playwright scraper on <strong className="font-medium text-neutral-100">AWS
+          Three parts. A <strong className="font-medium text-neutral-100">Playwright
+          scraper</strong> on <strong className="font-medium text-neutral-100">AWS
           Fargate</strong> — Fargate not Lambda because a run is around an hour
-          and Lambda caps at 15 minutes. <strong className="font-medium text-neutral-100">Minerva</strong>,
-          skill normalization on <strong className="font-medium text-neutral-100">Amazon
+          and Lambda caps at 15 minutes. <strong className="font-medium text-neutral-100">Skill
+          normalization</strong> on <strong className="font-medium text-neutral-100">Amazon
           Bedrock</strong> — hard rules first, then a larger Claude model to
           canonicalize names and a smaller one to merge synonyms; prompting
           beat an embeddings approach that was built and dropped.{" "}
