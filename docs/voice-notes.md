@@ -124,6 +124,42 @@ was added so the next regression is visible, not inferred. Verified from a
 real browser end to end (begin → chunk → Polly → decode → schedule →
 onStart/onIdle) — see DECISIONS.md.
 
+## Barge-in — hands-free session + echo defence (2026-08-30)
+
+Voice worked end to end on staging, but the mic went dead while the agent
+spoke. `stt.ts` is now `createVoiceSession`: one persistent mic + 16 kHz
+AudioContext + worklet, `monitoring` ↔ `capturing`, a 500 ms pre-roll ring
+so barge-in doesn't clip the first word. Speak any time — including over the
+agent — and it stops instantly and listens; the partial answer stays in the
+transcript flagged `interrupted`.
+
+Echo (mic hears the agent, phone, no headphones):
+
+| layer | value | job |
+|---|---|---|
+| `echoCancellation` + `noiseSuppression` | on | device AEC removes most echo |
+| adaptive trigger | `max(0.014, echoFloor × 3.0)` | tracks *this* device's residual echo, measured live |
+| sustain | 3 chunks (~300 ms) | rejects taps / clicks / one loud syllable |
+| **guard window** | **700 ms after every playback start** | **loop protection** — disarmed while AEC converges + echo floor is seeded |
+
+Echo-floor tracker: seeded fast during the guard window, then a
+lower-envelope follower (steady echo pulls it up, a user-speech burst does
+not). A first attempt that only learned from sub-threshold samples
+self-triggered on any echo above the starting threshold — caught by
+`npm run verify-vad` (11/11; pure logic in `vad.ts`).
+
+Tuning from a cabled console: `[voice] levels rms=… thr=… echoFloor=…
+armed=…` prints every ~900 ms *while the agent speaks*. If the agent
+self-interrupts, `echoMargin` / `guardMs` / `sustainChunks` in
+`DEFAULT_VAD` are the knobs.
+
+**Not verified without hardware:** the real acoustic loop (does a given
+phone's post-AEC echo actually stay under 3× floor, does user speech land
+where the thresholds expect), `createVoiceSession` mic→onset→capture
+assembly, and a live barge during a real answer. The decision logic, the
+resampler, the Transcribe IAM path and `player.stop()` epoch-cancel are each
+verified separately.
+
 ## OQ-4 — Polly bidirectional streaming. Resolved 2026-08-30: not browser-reachable → sentence chunking.
 
 **Finding.** Amazon Polly shipped a real bidirectional streaming API,

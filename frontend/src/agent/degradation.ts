@@ -53,6 +53,10 @@ export interface DegradationState {
  * ended on an error, so the transcript shows the reply was cut short. */
 export const TRUNCATED_ANSWER_NOTE = "The answer was cut off there.";
 
+/** Same idea, but for a deliberate barge-in — the visitor started speaking
+ * while the answer was still playing, so it was stopped on purpose. */
+export const INTERRUPTED_ANSWER_NOTE = "You cut in here — the rest wasn't said.";
+
 const MANUAL_FALLBACK =
   "Browse the sections here or download the CV — everything about Rafal's work is there too.";
 

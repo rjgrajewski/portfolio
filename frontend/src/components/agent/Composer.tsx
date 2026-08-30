@@ -8,16 +8,19 @@ interface ComposerProps {
   onStop: () => void;
   /** Voice (Phase 4) — omitted / false when voice isn't configured. */
   voiceAvailable?: boolean;
+  /** Voice mode is on: the mic is live and listening hands-free. */
+  voiceMode?: boolean;
+  /** Actively capturing an utterance right now (vs. passively monitoring). */
   listening?: boolean;
   partialTranscript?: string;
-  onMicStart?: () => void;
-  onMicStop?: () => void;
+  onToggleVoice?: () => void;
 }
 
 /**
- * Text input for the agent, plus the mic control when voice is available.
- * Enter sends, Shift+Enter inserts a newline. The text path is never
- * disabled by a voice failure — voice is strictly additive.
+ * Text input for the agent, plus the voice-mode toggle when voice is
+ * available. Enter sends, Shift+Enter inserts a newline. The text path is
+ * never disabled by a voice failure, and typing still works while voice
+ * mode is on (as long as you're not mid-utterance).
  */
 export function Composer({
   canSend,
@@ -25,20 +28,18 @@ export function Composer({
   onSend,
   onStop,
   voiceAvailable = false,
+  voiceMode = false,
   listening = false,
   partialTranscript = "",
-  onMicStart,
-  onMicStop,
+  onToggleVoice,
 }: ComposerProps) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const focusedRef = useRef(false);
 
-  // Mobile: the on-screen keyboard covers the bottom of the layout (the
-  // page scrolls as one column below `lg:`). Keep the input — and the
-  // latest turn just above it — visible by scrolling it into the middle of
-  // the *visual* viewport whenever the keyboard opens or resizes
-  // (docs/ARCHITECTURE.md § Graceful degradation — "keyboard-covers-input").
+  // Mobile: the on-screen keyboard covers the bottom of the layout. Keep the
+  // input (and the latest turn just above it) visible by scrolling it into
+  // the middle of the *visual* viewport whenever the keyboard opens/resizes.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -52,7 +53,6 @@ export function Composer({
 
   function onFocus() {
     focusedRef.current = true;
-    // Wait for the keyboard animation, then bring the field into view.
     window.setTimeout(() => {
       inputRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
     }, 250);
@@ -88,23 +88,27 @@ export function Composer({
           <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-accent align-middle" />
           {partialTranscript || "Listening…"}
         </p>
+      ) : voiceMode ? (
+        <p className="mb-2 min-h-[1.25rem] text-small text-neutral-500">
+          <span className="mr-2 inline-block h-2 w-2 rounded-full bg-accent/60 align-middle" />
+          Voice on — just start talking. You can cut in while the agent speaks.
+        </p>
       ) : null}
 
       <div className="flex items-end gap-2">
         {voiceAvailable ? (
           <button
             type="button"
-            onClick={listening ? onMicStop : onMicStart}
-            disabled={busy && !listening}
-            aria-pressed={listening}
-            aria-label={listening ? "Stop listening" : "Ask by voice"}
-            className={`flex h-[2.75rem] w-[2.75rem] shrink-0 items-center justify-center rounded-lg border transition-colors disabled:opacity-40 ${
-              listening
+            onClick={onToggleVoice}
+            aria-pressed={voiceMode}
+            aria-label={voiceMode ? "Turn voice off" : "Talk to the agent"}
+            className={`flex h-[2.75rem] w-[2.75rem] shrink-0 items-center justify-center rounded-lg border transition-colors ${
+              voiceMode
                 ? "border-accent bg-accent/15 text-accent"
                 : "border-neutral-800 bg-neutral-950 text-neutral-300 hover:border-neutral-700 hover:text-neutral-100"
             }`}
           >
-            <MicGlyph listening={listening} />
+            <MicGlyph active={voiceMode} />
           </button>
         ) : null}
 
@@ -141,12 +145,7 @@ export function Composer({
   );
 }
 
-function MicGlyph({ listening }: { listening: boolean }) {
-  if (listening) {
-    return (
-      <span className="block h-3 w-3 rounded-[2px] bg-current" aria-hidden />
-    );
-  }
+function MicGlyph({ active }: { active: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -159,6 +158,7 @@ function MicGlyph({ listening }: { listening: boolean }) {
     >
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M6 11a6 6 0 0 0 12 0M12 17v4" />
+      {active ? <circle cx="12" cy="8" r="1.5" fill="currentColor" stroke="none" /> : null}
     </svg>
   );
 }

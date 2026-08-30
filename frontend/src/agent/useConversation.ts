@@ -7,16 +7,17 @@
  * terminal frame (`done` or `error`). `reveal_section` actions are applied
  * the instant they arrive, through the shared reveal path (uiActions.ts).
  *
- * Phase 4 — voice is a layer on top, not a separate machine:
+ * Phase 4 — voice:
  *   - a spoken turn is an ordinary turn whose reply text is ALSO piped to
  *     Polly (tts.ts) as it streams — first sentence synthesised the moment
- *     it's complete, while the answer is still arriving, so audio and the
- *     section reveal land together (the reveal already fires on the `action`
- *     frame, before the prose).
- *   - voice input (stt.ts) resolves to a transcript, which is submitted
- *     through the exact same turn path — so a visitor can ask by voice, then
- *     type the next question, in one conversation.
- *   - every voice failure leaves the text path completely untouched.
+ *     it's complete, so audio and the section reveal land together.
+ *   - "voice mode" is a persistent session (stt.ts `createVoiceSession`):
+ *     one mic, always monitoring. It auto-captures when the visitor speaks —
+ *     including WHILE THE AGENT IS TALKING (barge-in): the agent is cut off
+ *     instantly, the partial answer is kept and flagged, and the new
+ *     utterance becomes the next turn.
+ *   - a spoken question and a typed one interleave freely; a voice failure
+ *     never disables the text composer.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,7 +25,11 @@ import { runtimeConfig } from "../config/runtime";
 import { getSessionId } from "./sessionId";
 import { applyAgentAction } from "./uiActions";
 import { createSpeechPlayer, type SpeechPlayer } from "./tts";
-import { startListening, type RecognizerHandle } from "./stt";
+import {
+  createVoiceSession,
+  VoiceSessionError,
+  type VoiceSession,
+} from "./stt";
 import type { VoiceErrorCode } from "./degradation";
 import {
   AgentTransportError,
@@ -39,10 +44,12 @@ export interface ChatMessage {
   id: string;
   role: "user" | "agent";
   text: string;
-  /** Set on an agent message whose streamed answer ended on an error /
-   * dropped connection — the transcript shows it was cut short. Kept as a
-   * flag, never folded into `text`, so it never enters the model history. */
+  /** Streamed answer ended on an error / dropped connection. A flag, never
+   * folded into `text`, so it never enters the model history. */
   truncated?: boolean;
+  /** The visitor barged in (started speaking) while this answer was still
+   * playing — it was cut off deliberately. Same flag discipline. */
+  interrupted?: boolean;
 }
 
 export interface UseConversation {
@@ -51,15 +58,16 @@ export interface UseConversation {
   errorCode: ErrorCode | null;
   voiceErrorCode: VoiceErrorCode | null;
   canSend: boolean;
+  /** Voice mode is on — the mic is live and listening hands-free. */
+  voiceMode: boolean;
+  /** Currently capturing an utterance (as opposed to passively monitoring). */
   listening: boolean;
   partialTranscript: string;
   speaking: boolean;
   /** Text turn — reply is not spoken. */
   send: (text: string) => void;
-  /** Start mic capture; the transcript is submitted as a spoken turn. */
-  startVoice: () => void;
-  /** Finish mic capture early ("done talking"). */
-  stopVoice: () => void;
+  /** Turn voice mode on/off. */
+  toggleVoice: () => void;
   /** Unlock audio playback from a user gesture (mobile autoplay). */
   unlockAudio: () => void;
   /** Abort the in-flight turn + any playback. */
@@ -78,13 +86,15 @@ export function useConversation(): UseConversation {
   const [voiceErrorCode, setVoiceErrorCode] = useState<VoiceErrorCode | null>(
     null,
   );
+  const [voiceMode, setVoiceMode] = useState(false);
   const [listening, setListening] = useState(false);
   const [partialTranscript, setPartialTranscript] = useState("");
   const [speaking, setSpeaking] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const playerRef = useRef<SpeechPlayer | null>(null);
-  const recognizerRef = useRef<RecognizerHandle | null>(null);
+  const sessionRef = useRef<VoiceSession | null>(null);
+  const currentAgentIdRef = useRef<string | null>(null);
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
 
@@ -95,18 +105,27 @@ export function useConversation(): UseConversation {
     return () => {
       abortRef.current?.abort();
       playerRef.current?.stop();
-      recognizerRef.current?.cancel();
+      sessionRef.current?.close();
     };
   }, []);
 
   const getPlayer = useCallback((): SpeechPlayer => {
     if (!playerRef.current) {
       playerRef.current = createSpeechPlayer({
-        onStart: () => setSpeaking(true),
-        onIdle: () => setSpeaking(false),
+        onStart: () => {
+          setSpeaking(true);
+          sessionRef.current?.noteAgentAudioStart();
+        },
+        onIdle: () => {
+          setSpeaking(false);
+          sessionRef.current?.noteAgentAudioEnd();
+          sessionRef.current?.release();
+        },
         onError: (code) => {
           setSpeaking(false);
           setVoiceErrorCode(code);
+          sessionRef.current?.noteAgentAudioEnd();
+          sessionRef.current?.release();
         },
       });
     }
@@ -133,6 +152,14 @@ export function useConversation(): UseConversation {
     );
   }, []);
 
+  const markInterrupted = useCallback((id: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id && m.text.trim().length > 0 ? { ...m, interrupted: true } : m,
+      ),
+    );
+  }, []);
+
   const runTurn = useCallback(
     (raw: string, opts: { speak: boolean }) => {
       const text = raw.trim();
@@ -147,6 +174,7 @@ export function useConversation(): UseConversation {
         }));
 
       const agentId = newId();
+      currentAgentIdRef.current = agentId;
       setMessages((prev) => [
         ...prev,
         { id: newId(), role: "user", text },
@@ -155,9 +183,12 @@ export function useConversation(): UseConversation {
       setErrorCode(null);
       setStatus("thinking");
 
-      // Spoken turn: begin() a fresh utterance (halts any prior playback AND
-      // clears the stop latch so push()/end() below actually run). A text
-      // turn just silences any audio still playing.
+      // Tell the voice session an agent turn is in flight (so ambient noise
+      // isn't taken as a new question) — but it keeps monitoring for barge-in.
+      sessionRef.current?.hold();
+
+      // Spoken turn: begin() a fresh utterance (halts prior playback AND
+      // clears the stop latch so push()/end() run). Text turn: silence audio.
       let player: SpeechPlayer | null = null;
       if (opts.speak) {
         player = getPlayer();
@@ -232,15 +263,18 @@ export function useConversation(): UseConversation {
             player?.end();
           }
           abortRef.current = null;
+          // If nothing is (or will be) playing, hand the session back to
+          // plain monitoring now. Otherwise the player's onIdle does it.
+          if (
+            (!player || !player.isSpeaking()) &&
+            sessionRef.current?.state() !== "capturing"
+          ) {
+            sessionRef.current?.release();
+          }
         }
       })();
     },
-    [
-      appendToAgentMessage,
-      setAgentMessageText,
-      markTruncated,
-      getPlayer,
-    ],
+    [appendToAgentMessage, setAgentMessageText, markTruncated, getPlayer],
   );
 
   const send = useCallback(
@@ -248,66 +282,111 @@ export function useConversation(): UseConversation {
     [runTurn],
   );
 
-  const stopVoice = useCallback(() => {
-    recognizerRef.current?.stop();
+  const exitVoiceMode = useCallback(() => {
+    sessionRef.current?.close();
+    sessionRef.current = null;
+    setVoiceMode(false);
+    setListening(false);
+    setPartialTranscript("");
+    playerRef.current?.stop();
+    setSpeaking(false);
+    console.info("[voice] mode OFF");
   }, []);
 
-  const startVoice = useCallback(() => {
-    if (recognizerRef.current || busy) return;
-    if (runtimeConfig.credentialsUrl === null) return;
-
-    // The mic press is our user gesture — unlock playback for the reply.
-    // Do NOT stop the player here: runTurn(speak:true) calls begin() when the
-    // transcript arrives, which halts prior playback and re-arms the player.
-    // Calling stop() now would latch it inert before begin() runs.
+  const enterVoiceMode = useCallback(async () => {
+    if (sessionRef.current || runtimeConfig.credentialsUrl === null) return;
+    // This runs from the mic-button click — unlock playback in the gesture.
     void getPlayer().unlock();
-
     setVoiceErrorCode(null);
-    setPartialTranscript("");
-    setListening(true);
-    console.info("[voice] listening…");
+    console.info("[voice] starting session…");
 
-    recognizerRef.current = startListening({
-      onPartial: (t) => setPartialTranscript(t),
-      onFinal: (t) => {
-        recognizerRef.current = null;
-        setListening(false);
-        setPartialTranscript("");
-        const clean = t.trim();
-        console.info(`[voice] transcript final (${clean.length} chars): ` + JSON.stringify(clean.slice(0, 100)));
-        if (clean.length > 0) runTurn(clean, { speak: true });
-      },
-      onError: (code, message) => {
-        recognizerRef.current = null;
-        setListening(false);
-        setPartialTranscript("");
-        setVoiceErrorCode(code);
-        console.warn("voice input error", code, message);
-      },
-    });
-  }, [busy, getPlayer, runTurn]);
+    try {
+      const session = await createVoiceSession({
+        onSpeechStart: (reason) => {
+          console.info(`[voice] speech start (${reason})`);
+          if (reason === "barge-in") {
+            // Cut the agent off immediately — not at the next sentence.
+            abortRef.current?.abort();
+            abortRef.current = null;
+            playerRef.current?.stop();
+            setSpeaking(false);
+            setStatus((s) => (s === "thinking" || s === "streaming" ? "idle" : s));
+            const id = currentAgentIdRef.current;
+            if (id) markInterrupted(id);
+            console.info("[voice] speaking → interrupted → listening");
+          }
+          setListening(true);
+          setPartialTranscript("");
+        },
+        onPartial: (t) => setPartialTranscript(t),
+        onFinal: (t) => {
+          setListening(false);
+          setPartialTranscript("");
+          const clean = t.trim();
+          console.info(
+            `[voice] transcript final (${clean.length} chars): ` +
+              JSON.stringify(clean.slice(0, 100)),
+          );
+          if (clean.length > 0) {
+            sessionRef.current?.hold();
+            runTurn(clean, { speak: true });
+          } else {
+            sessionRef.current?.release();
+          }
+        },
+        onError: (code, message) => {
+          console.warn("[voice] session error", code, message);
+          setListening(false);
+          setPartialTranscript("");
+          setVoiceErrorCode(code);
+          if (code === "mic_denied" || code === "mic_unavailable") {
+            exitVoiceMode();
+          }
+        },
+        onStateChange: (state, detail) =>
+          console.info(`[voice] ${state} — ${detail}`),
+        onLevels: (i) =>
+          console.info(
+            `[voice] levels rms=${i.rms.toFixed(4)} thr=${i.threshold.toFixed(4)} ` +
+              `echoFloor=${i.echoFloor.toFixed(4)} armed=${i.armed}`,
+          ),
+      });
+      sessionRef.current = session;
+      setVoiceMode(true);
+      console.info("[voice] mode ON — just speak; cut in any time");
+    } catch (err) {
+      const e = err as VoiceSessionError;
+      setVoiceErrorCode(e?.code ?? "mic_unavailable");
+      console.warn("[voice] session failed to start", err);
+    }
+  }, [getPlayer, markInterrupted, runTurn, exitVoiceMode]);
+
+  const toggleVoice = useCallback(() => {
+    if (sessionRef.current) exitVoiceMode();
+    else void enterVoiceMode();
+  }, [enterVoiceMode, exitVoiceMode]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    recognizerRef.current?.cancel();
-    recognizerRef.current = null;
     playerRef.current?.stop();
-    setListening(false);
-    setPartialTranscript("");
     setSpeaking(false);
+    if (sessionRef.current?.state() !== "capturing") {
+      sessionRef.current?.release();
+    }
     setStatus((s) => (s === "thinking" || s === "streaming" ? "idle" : s));
   }, []);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    recognizerRef.current?.cancel();
-    recognizerRef.current = null;
+    sessionRef.current?.close();
+    sessionRef.current = null;
     playerRef.current?.stop();
     setMessages([]);
     setErrorCode(null);
     setVoiceErrorCode(null);
+    setVoiceMode(false);
     setListening(false);
     setPartialTranscript("");
     setSpeaking(false);
@@ -320,12 +399,12 @@ export function useConversation(): UseConversation {
     errorCode,
     voiceErrorCode,
     canSend,
+    voiceMode,
     listening,
     partialTranscript,
     speaking,
     send,
-    startVoice,
-    stopVoice,
+    toggleVoice,
     unlockAudio,
     stop,
     reset,

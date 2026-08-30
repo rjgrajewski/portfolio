@@ -11,16 +11,14 @@ const STARTERS = [
 ];
 
 /**
- * The agent panel — lives in the agent zone (AgentZone.tsx). Text input, an
- * optional mic, a streamed transcript, and a "thinking" state
+ * The agent panel — lives in the agent zone (AgentZone.tsx). Text input, a
+ * voice-mode toggle, a streamed transcript, and a "thinking" state
  * (docs/ROADMAP.md § Phase 2 / § Phase 4).
  *
  * Availability is not decided here — `deriveDegradation` (agent/degradation.ts)
  * is the single source of truth (docs/ROADMAP.md § Phase 6). This component
- * renders its verdict: an unavailable notice when the backend isn't wired,
- * an inline banner when a turn failed, a separate quieter line when a voice
- * path failed — and either way the text composer and the manual portfolio +
- * CV keep working, which the copy points at.
+ * renders its verdict; the text composer and the manual portfolio + CV keep
+ * working through any voice failure.
  */
 export function AgentPanel() {
   const {
@@ -29,12 +27,12 @@ export function AgentPanel() {
     errorCode,
     voiceErrorCode,
     canSend,
+    voiceMode,
     listening,
     partialTranscript,
     speaking,
     send,
-    startVoice,
-    stopVoice,
+    toggleVoice,
     stop,
   } = useConversation();
 
@@ -56,7 +54,9 @@ export function AgentPanel() {
         <p className="mt-1 text-small text-neutral-400">
           It answers in Rafal&rsquo;s third person and opens the matching
           section as it talks.
-          {degradation.voice.available ? " Tap the mic to ask out loud." : ""}
+          {degradation.voice.available
+            ? " Tap the mic and just talk — you can cut in while it speaks."
+            : ""}
         </p>
       </div>
 
@@ -98,10 +98,7 @@ export function AgentPanel() {
           ) : null}
 
           {degradation.voice.notice ? (
-            <p
-              role="status"
-              className="mt-2 text-small text-neutral-500"
-            >
+            <p role="status" className="mt-2 text-small text-neutral-500">
               {degradation.voice.notice}
             </p>
           ) : null}
@@ -112,10 +109,10 @@ export function AgentPanel() {
             onSend={send}
             onStop={stop}
             voiceAvailable={degradation.voice.available}
+            voiceMode={voiceMode}
             listening={listening}
             partialTranscript={partialTranscript}
-            onMicStart={startVoice}
-            onMicStop={stopVoice}
+            onToggleVoice={toggleVoice}
           />
         </>
       )}

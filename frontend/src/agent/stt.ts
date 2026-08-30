@@ -2,26 +2,39 @@
  * Speech-to-text — Amazon Transcribe streaming, browser-direct
  * (docs/ARCHITECTURE.md § Speech-to-text, § Real-time media transport).
  *
- * The browser opens the mic, streams 16 kHz mono signed-16-bit PCM straight
- * to Transcribe using short-lived credentials from the vending Lambda
- * (mediaCredentials.ts — the OQ-8 path). Interim results are reported live;
- * the turn ends automatically after a short silence once the visitor has
- * actually said something, on a hard time cap, or when the caller stops it.
+ * A persistent VOICE SESSION, not push-to-talk-per-turn. Once started it
+ * holds ONE mic + ONE 16 kHz AudioContext + ONE `pcm-chunker` worklet for
+ * the whole voice-mode lifetime. Two internal states:
  *
- * Audio format: the request declares `media-encoding=pcm`,
- * `sample-rate=16000`. The bytes MUST match or Transcribe drops the session
- * ("the audio doesn't match the parameters you provided"). The capture
- * `AudioContext` is *requested* at 16 kHz, but that is not guaranteed
- * (Safari in particular), so an AudioWorklet resamples continuously to
- * exactly 16 kHz (pass-through when the context is already there) and
- * encodes the PCM — see pcmChunker.ts for the why and the OfflineAudioContext-
- * vs-AudioWorklet call.
+ *   monitoring — worklet runs, no Transcribe stream open. Voice-activity
+ *                detection watches for a speech onset. A 500 ms pre-roll
+ *                ring buffer is kept so the first word isn't clipped when
+ *                capture starts.
+ *   capturing  — a Transcribe streaming WebSocket is open; PCM (pre-roll +
+ *                live) is streamed; end-of-utterance silence finalises it.
  *
- * Language is fixed to `en-US` — Phase 4 is English only; the EN/PL toggle
- * is Phase 5 (docs/ROADMAP.md).
+ * BARGE-IN: while the agent is talking (`hold()` + agent audio active) the
+ * session stays in `monitoring` and the VAD keeps watching. A sustained
+ * speech onset fires `onSpeechStart("barge-in")` and the session flips
+ * straight to `capturing` — the caller stops the agent. Self-interruption
+ * (the mic hearing the agent from a phone speaker) is guarded by:
+ *   - echoCancellation + noiseSuppression in getUserMedia,
+ *   - an ADAPTIVE trigger level = max(speechRms, echoFloorEMA * echoMargin)
+ *     that tracks this device's residual echo, measured live,
+ *   - a SUSTAIN requirement (3 chunks ~= 300 ms) that rejects taps/clicks,
+ *   - a GUARD window (700 ms) after every playback start during which
+ *     barge-in is disarmed — the loop-protection window; the echo floor is
+ *     seeded during it.
+ * `createVad` is pure and is unit-tested by `scripts/verify-vad.ts`.
  *
- * Text is always the fallback: every failure path calls `onError(code)` and
- * ends cleanly, leaving the text composer untouched.
+ * Audio format: request declares `media-encoding=pcm`, `sample-rate=16000`;
+ * `pcmChunker.ts` guarantees the bytes match (worklet resample to exactly
+ * 16 kHz + s16le). IAM: the browser SDK uses `transcribe:StartStream-
+ * TranscriptionWebSocket` (see identity-stack.ts / verify-oq8.ts).
+ *
+ * Language fixed to `en-US` (Phase 4 is English only). Text is always the
+ * fallback: every failure calls `onError(code)` and the session drops back
+ * to `monitoring` (or, for a mic failure, the caller closes it).
  */
 
 import {
@@ -35,6 +48,15 @@ import {
   MediaCredentialError,
 } from "./mediaCredentials";
 import { PCM_WORKLET_NAME, PCM_WORKLET_SOURCE } from "./pcmChunker";
+import {
+  createVad,
+  DEFAULT_VAD,
+  type MonitorVerdict,
+  type VadParams,
+} from "./vad";
+
+export type { MonitorVerdict, VadParams } from "./vad";
+export { DEFAULT_VAD, createVad } from "./vad";
 
 export type SttErrorCode =
   | "mic_denied"
@@ -42,32 +64,25 @@ export type SttErrorCode =
   | "transcribe_failed"
   | "credentials_refused";
 
-export interface RecognizerCallbacks {
-  /** Best transcript so far (finalised segments + current partial). */
-  onPartial?: (text: string) => void;
-  /** Fired once, when listening ends normally — the full transcript
-   *  (may be empty if nothing was said). */
-  onFinal?: (text: string) => void;
-  onError?: (code: SttErrorCode, message: string) => void;
-}
-
-export interface RecognizerHandle {
-  /** Stop listening and finalise (normal "I'm done talking"). */
-  stop(): void;
-  /** Abandon — no `onFinal`. */
-  cancel(): void;
-  /** True between start and end. */
-  isListening(): boolean;
+export class VoiceSessionError extends Error {
+  constructor(
+    readonly code: SttErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "VoiceSessionError";
+  }
 }
 
 const TARGET_RATE = 16000;
 const CHUNK_SAMPLES = 1600; // 100 ms @ 16 kHz — the size Transcribe wants
-const SILENCE_MS = 1300;
+const PREROLL_CHUNKS = 5; // ~500 ms kept before a capture starts
 const MAX_LISTEN_MS = 30000;
-const SPEECH_RMS = 0.014;
-const SILENCE_RMS = 0.008;
 
-/** Async queue that is also an async iterable — no lost-wakeup races. */
+// ---------------------------------------------------------------------------
+// Async queue that is also an async iterable — no lost-wakeup races.
+// ---------------------------------------------------------------------------
+
 class ChunkQueue {
   private items: Uint8Array[] = [];
   private waiters: ((r: IteratorResult<Uint8Array>) => void)[] = [];
@@ -105,213 +120,222 @@ class ChunkQueue {
   }
 }
 
-export function startListening(cb: RecognizerCallbacks): RecognizerHandle {
-  let listening = true;
-  let finished = false;
+// ---------------------------------------------------------------------------
+// The voice session
+// ---------------------------------------------------------------------------
 
-  let mediaStream: MediaStream | null = null;
-  let audioCtx: AudioContext | null = null;
-  let workletNode: AudioWorkletNode | null = null;
-  let sourceNode: MediaStreamAudioSourceNode | null = null;
-  let sink: GainNode | null = null;
+export type VoiceSessionState = "monitoring" | "capturing";
 
-  const queue = new ChunkQueue();
+export interface VoiceSession {
+  state(): VoiceSessionState;
+  /** The agent's turn is starting — keep monitoring (for barge-in) but
+   *  don't treat ambient noise as a new question. */
+  hold(): void;
+  /** The agent's turn is fully done — resume plain monitoring. */
+  release(): void;
+  /** The agent's audio just started playing — arms the loop guard. */
+  noteAgentAudioStart(): void;
+  /** The agent's audio finished. */
+  noteAgentAudioEnd(): void;
+  /** Tear down: release the mic entirely. */
+  close(): void;
+}
 
-  let heardSpeech = false;
-  let lastLoudAt = 0;
-  let hardCap: ReturnType<typeof setTimeout> | null = null;
-  let loggedFirstChunk = false;
+export interface VoiceSessionCallbacks {
+  /** A speech onset was detected while monitoring. `reason` is "barge-in"
+   *  if the agent was mid-turn (caller must stop it), else "new-question".
+   *  The session is already transitioning to `capturing`. */
+  onSpeechStart: (reason: "new-question" | "barge-in") => void;
+  onPartial: (text: string) => void;
+  /** An utterance ended on silence. */
+  onFinal: (text: string) => void;
+  onError: (code: SttErrorCode, message: string) => void;
+  onStateChange?: (state: VoiceSessionState, detail: string) => void;
+  /** Level telemetry — only emitted while the agent is speaking (the window
+   *  where the barge-in threshold matters), throttled to ~1/s. */
+  onLevels?: (info: MonitorVerdict & { rms: number }) => void;
+}
 
+export async function createVoiceSession(
+  cb: VoiceSessionCallbacks,
+  vadParams: VadParams = DEFAULT_VAD,
+): Promise<VoiceSession> {
+  // --- acquire mic + audio graph (before resolving) -----------------
+  let mediaStream: MediaStream;
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        sampleRate: TARGET_RATE,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+  } catch (err) {
+    const name = (err as Error)?.name;
+    throw new VoiceSessionError(
+      name === "NotAllowedError" || name === "SecurityError"
+        ? "mic_denied"
+        : "mic_unavailable",
+      name === "NotAllowedError"
+        ? "Microphone access was blocked."
+        : "No microphone is available.",
+    );
+  }
+
+  const Ctor =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext: typeof AudioContext })
+      .webkitAudioContext;
+  const audioCtx = new Ctor({ sampleRate: TARGET_RATE });
+  if (audioCtx.state === "suspended") {
+    try {
+      await audioCtx.resume();
+    } catch {
+      /* input contexts don't need a gesture; ignore */
+    }
+  }
+  if (!audioCtx.audioWorklet) {
+    mediaStream.getTracks().forEach((t) => t.stop());
+    throw new VoiceSessionError(
+      "mic_unavailable",
+      "This browser can't capture audio for voice.",
+    );
+  }
+
+  const workletUrl = URL.createObjectURL(
+    new Blob([PCM_WORKLET_SOURCE], { type: "application/javascript" }),
+  );
+  try {
+    await audioCtx.audioWorklet.addModule(workletUrl);
+  } catch (err) {
+    URL.revokeObjectURL(workletUrl);
+    mediaStream.getTracks().forEach((t) => t.stop());
+    void audioCtx.close();
+    console.warn("[stt] audioWorklet.addModule failed", err);
+    throw new VoiceSessionError("mic_unavailable", "Couldn't start audio capture.");
+  }
+  URL.revokeObjectURL(workletUrl);
+
+  const sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+  const workletNode = new AudioWorkletNode(audioCtx, PCM_WORKLET_NAME, {
+    numberOfInputs: 1,
+    numberOfOutputs: 1,
+    outputChannelCount: [1],
+    channelCount: 1,
+    channelCountMode: "explicit",
+    processorOptions: { targetRate: TARGET_RATE, chunkSize: CHUNK_SAMPLES },
+  });
+  const sink = audioCtx.createGain();
+  sink.gain.value = 0;
+  sourceNode.connect(workletNode);
+  workletNode.connect(sink);
+  sink.connect(audioCtx.destination);
+
+  console.info(
+    `[stt] voice session live — AudioContext ${audioCtx.sampleRate} Hz`,
+  );
+
+  // --- session state ---------------------------------------------
+  const vad = createVad(vadParams);
+  let state: VoiceSessionState = "monitoring";
+  let holding = false;
+  let agentAudioActive = false;
+  let closed = false;
+
+  const preroll: Uint8Array[] = [];
+
+  let captureQueue: ChunkQueue | null = null;
+  let captureEndReason: "final" | "abort" | "error" = "final";
   let finalText = "";
+  let hardCap: ReturnType<typeof setTimeout> | null = null;
+  let lastLevelLogAt = 0;
 
-  async function* audioEvents(): AsyncGenerator<{
-    AudioEvent: { AudioChunk: Uint8Array };
-  }> {
-    for await (const chunk of queue) {
+  function setState(next: VoiceSessionState, detail: string): void {
+    state = next;
+    cb.onStateChange?.(next, detail);
+  }
+
+  workletNode.port.onmessage = (ev: MessageEvent) => {
+    if (closed) return;
+    const d = ev.data as { pcm: ArrayBuffer; rms: number };
+    const bytes = new Uint8Array(d.pcm);
+    const now = performance.now();
+
+    if (state === "capturing") {
+      captureQueue?.push(bytes);
+      if (vad.captureFrame(d.rms, now).endOfTurn) endCapture("final");
+      return;
+    }
+
+    // monitoring — keep the pre-roll ring and run onset detection
+    preroll.push(bytes);
+    if (preroll.length > PREROLL_CHUNKS) preroll.shift();
+
+    const v = vad.monitorFrame(d.rms, { agentAudioActive, now });
+    if (
+      cb.onLevels &&
+      holding &&
+      agentAudioActive &&
+      now - lastLevelLogAt > 900
+    ) {
+      lastLevelLogAt = now;
+      cb.onLevels({ ...v, rms: d.rms });
+    }
+    if (v.trigger) beginCapture(holding ? "barge-in" : "new-question", now);
+  };
+
+  function beginCapture(
+    reason: "new-question" | "barge-in",
+    now: number,
+  ): void {
+    if (state === "capturing" || closed) return;
+    vad.startCapture(now);
+    finalText = "";
+    captureEndReason = "final";
+    captureQueue = new ChunkQueue();
+    for (const c of preroll) captureQueue.push(c);
+    preroll.length = 0;
+    setState("capturing", reason);
+    cb.onSpeechStart(reason);
+    hardCap = setTimeout(() => endCapture("final"), MAX_LISTEN_MS);
+    void runCapture();
+  }
+
+  function endCapture(reason: "final" | "abort"): void {
+    if (state !== "capturing") return;
+    if (hardCap) {
+      clearTimeout(hardCap);
+      hardCap = null;
+    }
+    captureEndReason = reason;
+    captureQueue?.close(); // lets the WS + result loop wind down
+  }
+
+  async function* audioEvents(
+    q: ChunkQueue,
+  ): AsyncGenerator<{ AudioEvent: { AudioChunk: Uint8Array } }> {
+    for await (const chunk of q) {
       yield { AudioEvent: { AudioChunk: chunk } };
     }
   }
 
-  function teardownAudio(): void {
-    try {
-      workletNode?.port.postMessage("flush");
-      workletNode?.disconnect();
-      sourceNode?.disconnect();
-      sink?.disconnect();
-    } catch {
-      /* ignore */
-    }
-    workletNode = null;
-    sourceNode = null;
-    sink = null;
-    mediaStream?.getTracks().forEach((t) => t.stop());
-    mediaStream = null;
-    if (audioCtx && audioCtx.state !== "closed") void audioCtx.close();
-    audioCtx = null;
-    if (hardCap) clearTimeout(hardCap);
-    hardCap = null;
-  }
-
-  function finish(kind: "final" | "cancel"): void {
-    if (finished) return;
-    finished = true;
-    listening = false;
-    queue.close();
-    teardownAudio();
-    if (kind === "final") cb.onFinal?.(finalText.trim());
-  }
-
-  function emitError(code: SttErrorCode, message: string): void {
-    if (finished) return;
-    finished = true;
-    listening = false;
-    queue.close();
-    teardownAudio();
-    cb.onError?.(code, message);
-  }
-
-  function onChunk(pcm: ArrayBuffer, rms: number): void {
-    if (!listening) return;
-
-    if (!loggedFirstChunk) {
-      loggedFirstChunk = true;
-      const ms = Math.round((pcm.byteLength / 2 / TARGET_RATE) * 1000);
-      console.info(
-        `[stt] first PCM chunk: ${pcm.byteLength} bytes (~${ms} ms @ ${TARGET_RATE} Hz mono s16le)`,
-      );
-    }
-
-    const now = performance.now();
-    if (rms > SPEECH_RMS) {
-      heardSpeech = true;
-      lastLoudAt = now;
-    } else if (rms > SILENCE_RMS) {
-      lastLoudAt = now;
-    }
-    if (heardSpeech && now - lastLoudAt > SILENCE_MS) {
-      finish("final");
-      return;
-    }
-
-    queue.push(new Uint8Array(pcm));
-  }
-
-  async function run(): Promise<void> {
-    // 1. mic permission
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: TARGET_RATE, // honoured by Chrome, ignored by Safari
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-    } catch (err) {
-      const name = (err as Error)?.name;
-      if (name === "NotAllowedError" || name === "SecurityError") {
-        emitError("mic_denied", "Microphone access was blocked.");
-      } else {
-        emitError("mic_unavailable", "No microphone is available.");
-      }
-      return;
-    }
-
-    // 2. credentials (breaker-checked vend)
+  async function runCapture(): Promise<void> {
     let creds;
     try {
       creds = await getMediaCredentials();
     } catch (err) {
-      const message =
-        err instanceof MediaCredentialError
-          ? err.message
-          : "Couldn't start voice.";
-      emitError("credentials_refused", message);
-      return;
-    }
-
-    if (!listening) {
-      teardownAudio();
-      return;
-    }
-
-    // 3. mic -> AudioWorklet (resample to exactly 16 kHz + PCM encode)
-    try {
-      const Ctor =
-        window.AudioContext ??
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext;
-      audioCtx = new Ctor({ sampleRate: TARGET_RATE });
-      if (audioCtx.state === "suspended") {
-        try {
-          await audioCtx.resume();
-        } catch {
-          /* the mic-button gesture should have covered this */
-        }
-      }
-
-      const honoured = audioCtx.sampleRate === TARGET_RATE;
-      console.info(
-        `[stt] AudioContext sampleRate = ${audioCtx.sampleRate} Hz ` +
-          `(requested ${TARGET_RATE}; ${honoured ? "pass-through" : "resampling in worklet"})`,
+      clearMediaCredentials();
+      finishCapture(
+        "error",
+        "credentials_refused",
+        err instanceof MediaCredentialError ? err.message : "Couldn't start voice.",
       );
-
-      if (!audioCtx.audioWorklet) {
-        emitError(
-          "mic_unavailable",
-          "This browser can't capture audio for voice.",
-        );
-        return;
-      }
-
-      const url = URL.createObjectURL(
-        new Blob([PCM_WORKLET_SOURCE], { type: "application/javascript" }),
-      );
-      try {
-        await audioCtx.audioWorklet.addModule(url);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-      if (!listening || finished) {
-        teardownAudio();
-        return;
-      }
-
-      sourceNode = audioCtx.createMediaStreamSource(mediaStream);
-      workletNode = new AudioWorkletNode(audioCtx, PCM_WORKLET_NAME, {
-        numberOfInputs: 1,
-        numberOfOutputs: 1,
-        outputChannelCount: [1],
-        channelCount: 1,
-        channelCountMode: "explicit",
-        processorOptions: {
-          targetRate: TARGET_RATE,
-          chunkSize: CHUNK_SAMPLES,
-        },
-      });
-      workletNode.port.onmessage = (ev: MessageEvent) => {
-        const d = ev.data as { pcm: ArrayBuffer; rms: number };
-        onChunk(d.pcm, d.rms);
-      };
-
-      // Route mic -> worklet -> muted sink -> destination. The sink keeps
-      // `process()` pulled while `gain = 0` means the mic is never echoed.
-      sink = audioCtx.createGain();
-      sink.gain.value = 0;
-      sourceNode.connect(workletNode);
-      workletNode.connect(sink);
-      sink.connect(audioCtx.destination);
-    } catch (err) {
-      console.warn("[stt] audio setup failed", err);
-      emitError("mic_unavailable", "Couldn't start audio capture.");
       return;
     }
+    if (state !== "capturing" || closed) return;
 
-    lastLoudAt = performance.now();
-    hardCap = setTimeout(() => finish("final"), MAX_LISTEN_MS);
-
-    // 4. Transcribe streaming
     const client = new TranscribeStreamingClient({
       region: runtimeConfig.mediaRegion,
       credentials: {
@@ -327,58 +351,101 @@ export function startListening(cb: RecognizerCallbacks): RecognizerHandle {
           LanguageCode: "en-US",
           MediaEncoding: "pcm",
           MediaSampleRateHertz: TARGET_RATE,
-          AudioStream: audioEvents(),
+          AudioStream: audioEvents(captureQueue!),
         }),
       );
 
       for await (const evt of res.TranscriptResultStream ?? []) {
-        if (finished) break;
+        if (state !== "capturing" || closed) break;
         const results = evt.TranscriptEvent?.Transcript?.Results ?? [];
         let partialTail = "";
         for (const r of results) {
-          const text = r.Alternatives?.[0]?.Transcript ?? "";
-          if (!text) continue;
-          if (r.IsPartial) {
-            partialTail = text;
-          } else {
-            finalText = `${finalText} ${text}`.trim();
-          }
+          const t = r.Alternatives?.[0]?.Transcript ?? "";
+          if (!t) continue;
+          if (r.IsPartial) partialTail = t;
+          else finalText = `${finalText} ${t}`.trim();
         }
-        cb.onPartial?.(`${finalText} ${partialTail}`.trim());
+        cb.onPartial(`${finalText} ${partialTail}`.trim());
       }
     } catch (err) {
       clearMediaCredentials();
       if (err instanceof MediaCredentialError) {
-        emitError("credentials_refused", err.message);
-      } else if (!finished) {
+        finishCapture("error", "credentials_refused", err.message);
+      } else if (state === "capturing") {
         console.warn("[stt] Transcribe stream error", err);
-        emitError("transcribe_failed", "Transcription failed.");
+        finishCapture("error", "transcribe_failed", "Transcription failed.");
       }
       return;
     }
 
-    if (!finished) finish("final");
+    // WS ended because endCapture() closed the queue.
+    finishCapture(captureEndReason === "abort" ? "abort" : "final");
   }
 
-  void run();
+  function finishCapture(
+    reason: "final" | "abort" | "error",
+    code?: SttErrorCode,
+    message?: string,
+  ): void {
+    if (state !== "capturing") return;
+    if (hardCap) {
+      clearTimeout(hardCap);
+      hardCap = null;
+    }
+    captureQueue = null;
+    vad.resetMonitor();
+    setState(
+      "monitoring",
+      reason === "error"
+        ? `capture error: ${code}`
+        : reason === "abort"
+          ? "capture aborted"
+          : "capture ended",
+    );
+    if (reason === "final") cb.onFinal(finalText.trim());
+    else if (reason === "error" && code) cb.onError(code, message ?? "Voice failed.");
+  }
 
   return {
-    stop() {
-      if (finished) return;
-      listening = false;
-      // Flush the worklet's partial chunk, then end the stream.
+    state: () => state,
+    hold() {
+      holding = true;
+      cb.onStateChange?.(state, "hold — agent turn");
+    },
+    release() {
+      if (!holding && !agentAudioActive) return;
+      holding = false;
+      agentAudioActive = false;
+      vad.resetMonitor();
+      cb.onStateChange?.(state, "released — monitoring for next");
+    },
+    noteAgentAudioStart() {
+      agentAudioActive = true;
+      vad.noteAgentAudioStart(performance.now());
+      cb.onStateChange?.(state, "agent audio start — barge-in disarmed (guard)");
+    },
+    noteAgentAudioEnd() {
+      agentAudioActive = false;
+      cb.onStateChange?.(state, "agent audio end");
+    },
+    close() {
+      if (closed) return;
+      closed = true;
+      captureQueue?.close();
+      captureQueue = null;
+      if (hardCap) clearTimeout(hardCap);
       try {
-        workletNode?.port.postMessage("flush");
+        workletNode.port.postMessage("flush");
+        workletNode.disconnect();
+        sourceNode.disconnect();
+        sink.disconnect();
       } catch {
         /* ignore */
       }
-      setTimeout(() => queue.close(), 80);
-    },
-    cancel() {
-      finish("cancel");
-    },
-    isListening() {
-      return listening && !finished;
+      mediaStream.getTracks().forEach((t) => t.stop());
+      if (audioCtx.state !== "closed") void audioCtx.close();
+      cb.onStateChange?.("monitoring", "session closed");
+      console.info("[stt] voice session closed");
     },
   };
 }
