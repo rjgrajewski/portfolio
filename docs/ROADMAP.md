@@ -10,13 +10,13 @@ Context for scope decisions: [ARCHITECTURE.md](ARCHITECTURE.md). Decisions log: 
 
 The core flow must work; it need not be polished. Concretely, by Tuesday:
 
-- [ ] Phase 0 complete (budget alarm live, region verified, dev/prod split real)
-- [ ] Phase 1 complete (landing + manual click-through + CV download all work — this is the non-AI fallback)
+- [x] Phase 0 complete (budget alarm live, region verified, dev/prod split real) — `portfolio-api-prod` deployed `2026-08-30` (`CREATE_COMPLETE`), separate `-prod` DynamoDB tables + `prod/` S3 prefix confirmed live.
+- [x] Phase 1 complete (landing + manual click-through + CV download all work — this is the non-AI fallback) — live on production (`https://main.daz9bpic9q3nd.amplifyapp.com`) after the `dev` → `main` merge.
 - [x] Phase 2 complete (agent answers questions in **text**, with real-but-minimal content) — deployed to dev, verified on the Amplify staging URL
-- [ ] Phase 3 complete (agent answer reveals the matching section, simultaneously)
-- [ ] Phase 8 at least **seeded with real content** for the flagship topics (FlowJob, Amazon, education) — full authoring can continue after
-- [ ] Phase 6 fallbacks for the paths in the demo (Bedrock down → manual portfolio; slow → loading state)
-- [ ] **Monday evening: mini dry-run on the actual device and network the demo will use.** Explicitly confirm the **daily circuit-breaker threshold on prod is a per-env config value set high enough that it cannot trip mid-interview** — this is the one failure mode that would be actively caused by the abuse-protection design working as intended, and it must not happen live.
+- [x] Phase 3 complete (agent answer reveals the matching section, simultaneously) — desktop in-place + **mobile full-screen takeover**; one reveal path, verified on the live dev URL (tap and agent-triggered) and on production.
+- [x] Phase 8 at least **seeded with real content** for the flagship topics (FlowJob, Amazon, education, this portfolio) — done; full authoring can continue after.
+- [x] Phase 6 fallbacks for the paths in the demo (Bedrock down → manual portfolio; slow → loading state) — **demo scope only** (voice doesn't exist yet); `agent/degradation.ts` is the single source of truth, every failure notice points at the manual portfolio + CV, partial-answer-then-error keeps the text and flags it cut off.
+- [ ] **Monday evening: mini dry-run on the actual device and network the demo will use.** The **prod daily circuit-breaker threshold** is a per-env config value (`dailyCircuitBreakerThreshold: 500`, session cap `40`, in `backend/infra/lib/config.ts`) — reviewed for this cutover and confirmed far above any realistic interview volume (~10–40 messages), so it cannot trip mid-demo. Still worth one real end-to-end pass on the demo device/network.
 
 Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phase 5), the full injection test pass (Phase 7).
 
@@ -33,9 +33,9 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 - [x] Repo scaffold: npm workspaces (`frontend`, `backend/infra`), `frontend/` (Vite + React + TS + Tailwind, builds clean), `backend/infra/` (see below), `content/` (stub `README.md`, seeded from Phase 2), `scripts/`, `.nvmrc`, `.gitignore`, CI stubs (below). Git repo pushed to `github.com/rjgrajewski/portfolio`, `main` and `dev` branches both tracked.
 - [x] CDK skeleton: `config.ts` with dev/prod params (model ID as the `eu.*` inference-profile form, circuit-breaker threshold as a configurable per-env value, not hardcoded); `api-stack.ts` and `guardrails-stack.ts` as intentionally empty skeletons (see file-level doc comments for why); `identity-stack.ts` correctly **not created** (Phase 4, after OQ-8). `cdk synth` verified green locally for both `env=dev` and `env=prod`, and wired into `backend-ci.yml`.
 - [x] Amplify Hosting app connected to the repo (done by hand in the console, as anticipated above); `dev` → `https://dev.daz9bpic9q3nd.amplifyapp.com` (staging), `main` → `https://main.daz9bpic9q3nd.amplifyapp.com` (production). **Hit one real failure on the way**: the original `amplify.yml` used `appRoot: frontend` + `cd .. && npm ci` to reach the npm-workspaces root — `preBuild` passed, but `build` started from a different working directory than expected and walked above the repo root, hitting `ENOENT` on `package.json`. Fixed by dropping `appRoot` entirely and building straight from the repo root (`npm ci`, `npm run build --workspace=frontend`), with `artifacts.baseDirectory: frontend/dist`. `main`'s first build (job 1) is `FAILED` in Amplify's history for exactly this reason; job 2, on the fix commit, is `SUCCEED`. `dev`'s first build already used the fixed spec and is `SUCCEED`. See `docs/DECISIONS.md`.
-- [ ] Confirm dev/prod separation is real: separate CDK stacks, separate S3 prefixes, separate DynamoDB table names — **scaffolded** in `config.ts`/`bin/app.ts` (stacks are already named `portfolio-guardrails-dev`/`-prod`, `portfolio-api-dev`/`-prod`), but nothing has been deployed yet, so this can't be marked confirmed until a real `cdk deploy` happens.
+- [x] Confirm dev/prod separation is real: separate CDK stacks, separate S3 prefixes, separate DynamoDB table names — **confirmed `2026-08-30`**. `portfolio-api-prod` deployed to `eu-central-1` (`CREATE_COMPLETE`); `portfolio-agent-prod` Lambda + Function URL (CORS locked to `https://main.daz9bpic9q3nd.amplifyapp.com`), tables `portfolio-{sessions,usage-counters,conversation-logs}-prod`, bucket `portfolio-content-776715560866-prod` all created and distinct from dev. Content synced to the `prod/` prefix. `guardrails-*` stacks stay undeployed (empty skeletons — nothing to deploy).
 
-**Exit:** money can't leak silently (done — manual budgets + circuit-breaker design); a placeholder deploys to two URLs from two branches (**done** — see the Amplify line above). Phase 0 is closed; the one item left unchecked below (CDK dev/prod separation) needs a real `cdk deploy`, which hasn't happened yet and isn't required for the placeholder-deploy exit bar.
+**Exit:** money can't leak silently (done — manual budgets + circuit-breaker design); a placeholder deploys to two URLs from two branches (**done**). Phase 0 is **closed** — dev/prod separation is now real, not just scaffolded.
 
 ---
 
@@ -45,9 +45,9 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 - [x] Landing view: photo (SVG monogram placeholder) + short blurb (placeholder copy) in `Hero.tsx`, with the `AgentEntryTeaser` given the visually primary spot — agent-as-main-entry, not an afterthought — and a "Browse manually" control underneath.
 - [x] Section registry (`frontend/src/content/sections.ts`) — id/title/order for `education`, `amazon`, `flowjob`, `portfolio-itself`.
 - [x] `SectionShell` + reveal-in-place animation (the one code path for "show section X") — CSS `grid-template-rows` 0fr→1fr + opacity, no animation library, `prefers-reduced-motion` respected globally. State lives in `frontend/src/content/activeSectionStore.ts`, a plain module-level store (not React Context) specifically so Phase 3's `reveal_section` tool handler can call the exact same `revealSection()` function from outside the component tree. See `docs/DECISIONS.md`.
-- [x] Manual section components: Education, Amazon, FlowJob, Portfolio-itself — placeholder content, each flagging itself as seed content pending Phase 8.
+- [x] Manual section components: Education, Amazon, FlowJob, Portfolio-itself — **real content** (`2026-08-30`), authored from `content/topics/*.md` so the manual view and the agent can't diverge; scannable visual form (short blocks, bolded specifics), not the corpus prose. `PlaceholderNote` dropped from all four. The old PortfolioItself + Footer copy claiming Polly/Transcribe were live is fixed — they describe only what runs today.
 - [x] CV download — real (generated placeholder) PDF at `frontend/public/cv/cv.pdf`, wired to a visible button in the sticky header.
-- [x] Responsive: desktop-primary, verified genuinely usable on a 375×812 mobile viewport (layout only at this stage — full-screen section takeover is Phase 3).
+- [x] Responsive: desktop-primary, verified genuinely usable on a 375×812 mobile viewport (layout only at this stage — full-screen section takeover shipped in Phase 3).
 - [x] Deploys clean to staging — pushed to `dev`, Amplify build `SUCCEED`, verified live at `https://dev.daz9bpic9q3nd.amplifyapp.com`: renders correctly, no console errors, `/cv/cv.pdf` serves `200` with the right content type and byte size.
 
 **Exit:** a recruiter who never touches the AI has a complete portfolio experience.
@@ -75,14 +75,14 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 ## Phase 3 — Agentic UI integration
 
-- [ ] `reveal_section(sectionId)` tool exposed to the model
-- [ ] Frontend maps the action to the section registry and triggers the reveal
-- [ ] Reveal and answer land **simultaneously** — fire the reveal as soon as the streamed output yields the action, not after the prose
-- [ ] Manual click and agent action share one reveal code path (verified, not assumed)
-- [ ] Mobile: section reveal becomes a full-screen takeover where a side panel won't work
-- [ ] No route changes / no new tabs — chat + audio state survives every reveal
+- [x] `reveal_section(sectionId)` tool exposed to the model — shipped in Phase 2 (`backend/functions/agent/src/tools.ts`).
+- [x] Frontend maps the action to the section registry and triggers the reveal — `agent/uiActions.ts` → `revealSection` (Phase 2).
+- [x] Reveal and answer land **simultaneously** — the `action` frame fires the reveal the instant the model emits it, before the prose; verified on the live dev URL (`reveal` at t=0, answer still streaming).
+- [x] Manual click and agent action share one reveal code path — `content/activeSectionStore.ts`, verified not assumed. `SECTION_CONTENT` also extracted to one module (`components/portfolio/sectionContent.ts`) so desktop and mobile render identical content.
+- [x] Mobile: section reveal becomes a full-screen takeover (`components/portfolio/MobileSectionOverlay.tsx`) with a clear "All sections" exit, body-scroll lock, Esc-to-close, focus moved to the exit control. `useIsDesktop` (matchMedia `(min-width:1024px)`, the same breakpoint as `lg:` / `.app-layout`) only picks the *presentation* — desktop stays the in-place accordion — it is not a second reveal state.
+- [x] No route changes / no new tabs — chat state survives every reveal. The overlay only *reads* `activeSectionStore` and calls `closeActiveSection` / `revealSection`; the agent zone never unmounts, so an agent-triggered reveal opens the takeover and the transcript is intact on close. Verified live (tap **and** agent-triggered) on desktop and a 375×812 mobile viewport.
 
-**Exit:** "tell me about FlowJob" → FlowJob section opens as the answer is delivered, on desktop and mobile.
+**Exit:** "tell me about FlowJob" → FlowJob section opens as the answer is delivered, on desktop and mobile. **Met** — verified on the live dev URL and on production.
 
 ---
 
@@ -116,16 +116,19 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 ## Phase 6 — Graceful degradation hardening
 
-- [ ] Single client-side degradation state (`degradation.ts`) reflected in the UI
-- [ ] Mic denied/unavailable → text input + clear message
-- [ ] Transcribe fails → text input still works; voice button error state
-- [ ] Polly fails → answer shown as text (optional `speechSynthesis` last resort)
-- [ ] Bedrock fails / throttled / **circuit-breaker tripped** → agent panel shows an unavailable state; manual portfolio + CV download fully functional
-- [ ] Slow response → visible thinking state; no silent dead air
-- [ ] `docs/graceful-degradation.md` — the matrix, kept current
-- [ ] Manually exercise every row (kill each dependency in dev and observe)
+> **Demo-scope pass done `2026-08-30`.** Only the text-agent failure modes are handled — mic / Transcribe / Polly don't exist yet (Phase 4), so their rows stay open on purpose. Full hardening + the written matrix is still a later pass.
 
-**Exit:** every single failure mode lands somewhere usable; nothing dead-ends.
+- [x] Single client-side degradation state (`agent/degradation.ts`) reflected in the UI — `deriveDegradation({configured, errorCode})` → `{mode, notice, canRetry}`. `AgentPanel` renders its verdict; no ad-hoc availability logic anywhere else.
+- [ ] Mic denied/unavailable → text input + clear message *(Phase 4 — no mic yet)*
+- [ ] Transcribe fails → text input still works; voice button error state *(Phase 4 — no Transcribe yet)*
+- [ ] Polly fails → answer shown as text (optional `speechSynthesis` last resort) *(Phase 4 — no Polly yet)*
+- [x] Bedrock fails / throttled / **circuit-breaker tripped** → agent panel shows a clear notice ("browse the sections here or download the CV"); the manual portfolio + CV stay fully functional. Handles every stream-contract error code (`throttled` / `breaker_tripped` / `session_cap` / `upstream_error` / `internal`) plus a dropped connection (`network`). `session_cap` / `breaker_tripped` also disable the composer + starters (a retry can't clear them this session).
+- [x] Partial answer that then errors / drops → the streamed text stays in the transcript, the message is flagged `truncated` ("The answer was cut off there."), and the banner carries the reason. The flag never enters the model history.
+- [x] Slow response → visible "thinking" dots the instant a turn starts, a streaming cursor while text arrives; never silent dead air.
+- [ ] `docs/graceful-degradation.md` — the matrix, kept current *(later pass — full matrix)*
+- [ ] Manually exercise every row (kill each dependency in dev and observe) *(later pass — needs the voice deps to exist)*
+
+**Exit:** every single failure mode lands somewhere usable; nothing dead-ends. **Text-agent paths met**; voice paths pending Phase 4.
 
 ---
 
@@ -151,15 +154,29 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 > The agent is only as good as its source material. This comes *after* the MVP build so the pipeline can be tested end to end early — but it is still **on the critical path for Tuesday** and must not be discovered late. A genuinely solid first pass across business + technical layers for four flagship topics plus STAR case studies is realistically **closer to a full day** than "a couple of hours". For Tuesday, minimal real seed content for the flagship topics (as already scoped in the [minimum bar](#tuesday-demo--minimum-bar)) is sufficient — full authoring for every layer can continue after the demo.
 
-- [ ] CV — the authoritative summary (feeds `core.md` and the PDF)
-- [ ] Per-topic write-ups, **business layer**: problem solved, why it mattered — Amazon, FlowJob, education
-- [ ] Per-topic write-ups, **technical layer**: stack, decisions, trade-offs
+- [ ] CV — the authoritative summary (feeds `core.md` and the PDF) *(CV PDF was swapped for the real one in `4c38ea1`; `core.md` summary rewritten from it)*
+- [x] Per-topic write-ups, **business layer**: problem solved, why it mattered — Amazon, FlowJob, education *(first real pass — from the code-based flowjob.it repo analysis + the CV; `core.md` + `manifest.json` updated, seed markers removed. Open questions below.)*
+- [x] Per-topic write-ups, **technical layer**: stack, decisions, trade-offs *(FlowJob rebuilt from the repo analysis — Argus/Minerva, Fargate-vs-Lambda, the two Bedrock models, SQL match score, HttpOnly+CSRF kept; source-doc artifacts stripped)*
+- [x] Portfolio-as-a-project write-up (`portfolio-itself.*.md`) — architecture as a topic the agent can discuss *(from ARCHITECTURE.md + DECISIONS.md)*
+- [x] `manifest.json` finalised — every topic, its layers, a one-line summary *(rhymind → portfolio-itself; summaries refreshed; seed note dropped)*
+- [x] Sync to dev, then prod *(`prod/` prefix synced `2026-08-30`; dev + prod Lambdas also carry the bundled copy)*
 - [ ] STAR case studies for the flagship projects (business + technical layers)
 - [ ] Thin personal / interests layer (`personal.md`)
-- [ ] Portfolio-as-a-project write-up (`portfolio-itself.*.md`) — architecture as a topic the agent can discuss
-- [ ] `manifest.json` finalised — every topic, its layers, a one-line summary
 - [ ] `content/README.md` authoring guide reflects the final tone/length/layering rules
-- [ ] Sync to dev, then prod
+
+**Open content questions — to resolve with Rafal (voice chat), then fold into the corpus:**
+
+- [ ] FlowJob: confirm the AWS Summit Warsaw / USD 1,000 Amazon funding line (public? year? "more funding after launch" = commitment or expectation?) — it's the one fact in the flowjob files that could not have come from code/git.
+- [ ] FlowJob: the two Bedrock models — keep abstract ("a larger / a smaller Claude model") or name them (repo README says Claude 3.5 Sonnet / Claude 3 Haiku)? Which is current in code?
+- [ ] FlowJob: keep the cost figures (USD 3/15 and 1/5 per M tokens, ~USD 3/mo compute — public pricing + estimate, not measured) or drop to "cents a day / a few dollars a month"?
+- [ ] FlowJob: confirm "since October 2025" as the date to state; confirm the run figures (~few thousand listings, ~1h, ~hundreds of inserts, ~100 deletes) are OK to give.
+- [ ] Amazon: what did the **Associate Partner (2018–2021)** role actually involve? Currently only "the entry point, in operations".
+- [ ] Amazon: is "hundreds of thousands of workers" the right public figure, and what does it measure (headcount supported / hired per year / total)?
+- [ ] Amazon: anything that must **not** be said publicly (programme names, internal tools, teams, exact metrics)? Any specific achievement to name? BI tool for the dashboards (QuickSight / Tableau / internal) or keep "dashboards" generic?
+- [ ] Education: degree level (inżynier / licencjat)? Confirm CS was studied part-time alongside the Amazon job. Any specialisation / thesis to add (`education.technical.md` currently flags this as a gap). Keep the "sales & account management 2014–2018" summary of the pre-Amazon years, or drop it?
+- [ ] portfolio-itself: anything the agent should not volunteer unprompted (the $25 figure, circuit-breaker mechanics, "session ID trivially rotated")?
+- [ ] Corpus name convention: currently ASCII `Rafal` / `Wroclaw` (matches `core.md` + system prompt). Switch the whole corpus to `Rafał`?
+- [ ] `docs/ARCHITECTURE.md` still names Rhymind in non-historical, structural spots (repo-layout tree, the `reveal_section` section-ID list, § Agent persona "Scope"). Left untouched per instruction — clean up in a follow-up?
 
 **Exit:** the agent can go deep, credibly, across the whole professional history in both business and technical registers.
 
