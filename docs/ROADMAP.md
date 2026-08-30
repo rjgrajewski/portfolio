@@ -12,7 +12,7 @@ The core flow must work; it need not be polished. Concretely, by Tuesday:
 
 - [x] Phase 0 complete (budget alarm live, region verified, dev/prod split real) — `portfolio-api-prod` deployed `2026-08-30` (`CREATE_COMPLETE`), separate `-prod` DynamoDB tables + `prod/` S3 prefix confirmed live.
 - [x] Phase 1 complete (landing + manual click-through + CV download all work — this is the non-AI fallback) — live on production (`https://main.daz9bpic9q3nd.amplifyapp.com`) after the `dev` → `main` merge.
-- [x] Phase 2 complete (agent answers questions in **text**, with real-but-minimal content) — deployed to dev, verified on the Amplify staging URL
+- [x] Phase 2 complete (agent answers questions in **text**, with real-but-minimal content) — deployed to dev **and production**, verified on both Amplify URLs
 - [x] Phase 3 complete (agent answer reveals the matching section, simultaneously) — desktop in-place + **mobile full-screen takeover**; one reveal path, verified on the live dev URL (tap and agent-triggered) and on production.
 - [x] Phase 8 at least **seeded with real content** for the flagship topics (FlowJob, Amazon, education, this portfolio) — done; full authoring can continue after.
 - [x] Phase 6 fallbacks for the paths in the demo (Bedrock down → manual portfolio; slow → loading state) — **demo scope only** (voice doesn't exist yet); `agent/degradation.ts` is the single source of truth, every failure notice points at the manual portfolio + CV, partial-answer-then-error keeps the text and flags it cut off.
@@ -62,14 +62,14 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 - [x] `get_content(topic, layer)` tool — fetch from bundled files first, S3 next (`contentStore.ts`; S3 seam is a `CONTENT_BUCKET` env var away)
 - [x] Resolve **OQ-1** (tool-use sequencing vs. streaming, and the Lambda→browser wire format) — NDJSON `{text|action|done|error}` contract settled, two-model-call approach adopted; **parallel tool use confirmed** for Haiku 4.5 on Bedrock (`scripts/verify-parallel-tools.ts`, 6/6) so a "goes deep" turn is 2 model calls, not 3. Recorded in [DECISIONS.md](DECISIONS.md); OQ-1 retired from [ARCHITECTURE.md](ARCHITECTURE.md).
 - [x] Reasoning transport: **Lambda Function URL with response streaming** (`api-stack.ts` — `InvokeMode: RESPONSE_STREAM`, CORS on the Function URL, in-function token-bucket throttle in `throttle.ts`)
-- [x] `sessions` + `usage-counters` + `conversation-logs` DynamoDB tables (dev) — on-demand, TTL, `RemovalPolicy.DESTROY`; content + timestamp only, zero identifiers
+- [x] `sessions` + `usage-counters` + `conversation-logs` DynamoDB tables (dev **and prod**, separate `-dev` / `-prod` names) — on-demand, TTL, `RemovalPolicy.DESTROY`; content + timestamp only, zero identifiers
 - [x] **Per-session message cap** enforced server-side (`sessionCap.ts`, per-env `sessionMessageCap` in `config.ts`)
 - [x] **Real-time daily circuit-breaker** — atomic daily counter checked at invocation start (`breaker.ts`, per-env `dailyCircuitBreakerThreshold`)
 - [x] **Conversation logging** — content + timestamp, no identity (`log.ts`)
 - [x] Frontend agent panel: text input, streamed transcript, thinking/loading state (`components/agent/`, `agent/useConversation.ts`, `agent/transport.ts`; `reveal_section` routed through the existing `revealSection` in `activeSectionStore.ts`)
 - [x] `scripts/sync-content.ts` — push `content/` to the dev S3 prefix (`npm run content:sync -- --env dev`)
 
-**Exit:** ask a question in text, get a concise, on-persona, streamed answer grounded in the seed corpus; spend is capped and logged. **Met** — `portfolio-api-dev` deployed to `eu-central-1`, verified live on the dev Amplify staging URL (scope boundary, sensitive-question redirect, injection resistance, multi-turn history, and simultaneous section reveal all confirmed against the deployed stack).
+**Exit:** ask a question in text, get a concise, on-persona, streamed answer grounded in the corpus; spend is capped and logged. **Met** — `portfolio-api-dev` and `portfolio-api-prod` deployed to `eu-central-1`, verified live on both the staging and production Amplify URLs (scope boundary, sensitive-question redirect, injection resistance, multi-turn history, and simultaneous section reveal all confirmed against the deployed stacks).
 
 ---
 
@@ -152,7 +152,9 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 ## Phase 8 — Content authoring (post-MVP, on the critical path)
 
-> The agent is only as good as its source material. This comes *after* the MVP build so the pipeline can be tested end to end early — but it is still **on the critical path for Tuesday** and must not be discovered late. A genuinely solid first pass across business + technical layers for four flagship topics plus STAR case studies is realistically **closer to a full day** than "a couple of hours". For Tuesday, minimal real seed content for the flagship topics (as already scoped in the [minimum bar](#tuesday-demo--minimum-bar)) is sufficient — full authoring for every layer can continue after the demo.
+> The agent is only as good as its source material. This comes *after* the MVP build so the pipeline can be tested end to end early — but it is still **on the critical path for Tuesday** and must not be discovered late. A genuinely solid first pass across business + technical layers for four flagship topics plus STAR case studies is realistically **closer to a full day** than "a couple of hours". For Tuesday, minimal real content for the flagship topics (as already scoped in the [minimum bar](#tuesday-demo--minimum-bar)) is sufficient — full authoring for every layer can continue after the demo.
+>
+> **Status:** the flagship-topic first pass (business + technical, plus `portfolio-itself`) is **done and synced to dev + prod**. What's left is STAR case studies, the personal layer, the `content/README.md` authoring guide, and folding in the answers to the open questions below.
 
 - [ ] CV — the authoritative summary (feeds `core.md` and the PDF) *(CV PDF was swapped for the real one in `4c38ea1`; `core.md` summary rewritten from it)*
 - [x] Per-topic write-ups, **business layer**: problem solved, why it mattered — Amazon, FlowJob, education *(first real pass — from the code-based flowjob.it repo analysis + the CV; `core.md` + `manifest.json` updated, seed markers removed. Open questions below.)*

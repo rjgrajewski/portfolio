@@ -12,14 +12,21 @@ The AI and the manual click-through drive the **same** underlying content and UI
 
 ## Status
 
+Live in production. The core flow works end to end: the manual portfolio, the
+CV download, and the **text** AI agent (streamed answers, section reveal in
+sync on desktop and mobile).
+
 | | |
 |---|---|
-| **Phase** | Documentation / pre-implementation |
-| **Code** | None yet — scaffolding begins after these docs are approved |
-| **Near-term goal** | Core flow demoable for an interview on **Tuesday** (does not need to be fully polished) |
-| **Longer-term goal** | Reusable, general-purpose portfolio asset for an ongoing job search |
+| **Done** | Phases 0–3. Cost guardrails + dev/prod split, the manual portfolio shell, the text agent on Bedrock, and the agentic reveal UI — all deployed and verified on production. |
+| **Content (Phase 8)** | A first real pass for the flagship topics (Amazon, FlowJob, education, this portfolio itself) — beyond the original seed, not yet the full authoring. STAR case studies and the personal layer are not written yet. |
+| **Partial (Phase 6)** | Graceful degradation is done for the **text-agent** failure paths (demo scope): one availability source of truth, every failure routes to the manual portfolio + CV, partial answers are kept and flagged. The mic / Transcribe / Polly rows wait on Phase 4. |
+| **Not started** | Voice I/O (Phase 4), bilingual EN / PL (Phase 5), the prompt-injection test pass (Phase 7), the full visual / accessibility polish (Phase 9). |
+| **Longer-term goal** | Reusable, general-purpose portfolio asset for an ongoing job search. |
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for phased milestones and the Tuesday minimum bar.
+URLs: **production** `https://main.daz9bpic9q3nd.amplifyapp.com` · **staging** `https://dev.daz9bpic9q3nd.amplifyapp.com`
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the phase-by-phase detail and [docs/DECISIONS.md](docs/DECISIONS.md) for the decision log.
 
 ---
 
@@ -48,19 +55,23 @@ An AWS Budget with an alarm is part of initial setup ([docs/ROADMAP.md Phase 0](
 
 ## Tech stack (summary)
 
-| Layer | Choice |
-|---|---|
-| Hosting | AWS Amplify Hosting — branch-based deploys (`dev` → staging, `main` → production) |
-| Region | `eu-central-1` (Frankfurt) |
-| Frontend | Vite + React + TypeScript (static SPA), Tailwind for styling |
-| Reasoning | Amazon Bedrock — Claude Haiku 4.5 (`anthropic.claude-haiku-4-5`), streaming |
-| Text-to-speech | Amazon Polly — **generative engine tier** |
-| Speech-to-text | Amazon Transcribe — streaming |
-| Knowledge retrieval | Hybrid tool-fetch: always-loaded core in the system prompt + a `get_content(topic, layer)` tool that fetches depth from S3 on demand |
-| Compute | Lambda only — no always-on servers, no provisioned capacity |
-| State | DynamoDB (on-demand) — session caps, daily spend counter, conversation logs |
-| Direct browser→AWS media | Cognito Identity Pool with a tightly-scoped guest role (Polly + Transcribe only) — *current plan, not yet validated; see [ARCHITECTURE.md § Real-time media transport](docs/ARCHITECTURE.md#real-time-media-transport), the least-settled part of this architecture* |
-| Infra-as-code | AWS CDK (TypeScript) for everything except the Amplify hosting app |
+**Running today:** Amazon Bedrock (Claude Haiku 4.5), a streaming Lambda
+Function URL, DynamoDB, S3, and AWS Amplify Hosting. Polly, Transcribe, and
+Cognito are **Phase 4 (voice) and not built** — the rows below are marked.
+
+| Layer | Choice | State |
+|---|---|---|
+| Hosting | AWS Amplify Hosting — branch-based deploys (`dev` → staging, `main` → production) | live |
+| Region | `eu-central-1` (Frankfurt) | live |
+| Frontend | Vite + React + TypeScript (static SPA), Tailwind for styling | live |
+| Reasoning | Amazon Bedrock — Claude Haiku 4.5 (`eu.anthropic.claude-haiku-4-5-20251001-v1:0`, the EU inference profile), streamed over a **Lambda Function URL** (`InvokeMode: RESPONSE_STREAM`) | live |
+| Knowledge retrieval | Hybrid tool-fetch: always-loaded core in the system prompt + a `get_content(topic, layer)` tool for depth. No vector store. Content is bundled with the Lambda today; the S3 seam (`CONTENT_BUCKET`) is wired and ready | live |
+| Compute | Lambda only — no always-on servers, no provisioned capacity | live |
+| State | DynamoDB (on-demand) — per-session message cap, daily spend counter, conversation logs (content + timestamp, zero identity) | live |
+| Infra-as-code | AWS CDK (TypeScript) for everything except the Amplify hosting app | live |
+| Text-to-speech | Amazon Polly — generative engine tier | **planned — Phase 4, not built** |
+| Speech-to-text | Amazon Transcribe — streaming | **planned — Phase 4, not built** |
+| Direct browser→AWS media | Cognito Identity Pool with a tightly-scoped guest role (Polly + Transcribe only) — see [ARCHITECTURE.md § Real-time media transport](docs/ARCHITECTURE.md#real-time-media-transport), the least-settled part of the design | **planned — Phase 4, not built** |
 
 Full rationale, rejected alternatives, and trade-offs are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -80,46 +91,82 @@ scripts/    Content sync, region/model availability checks, cost estimation
 
 ---
 
-## How to run (planned — not yet implemented)
+## How to run
 
-> These commands describe the intended developer workflow. None of this exists yet.
+Everything below is implemented and in use. `dev` and `prod` are both
+deployed (`portfolio-api-dev` / `portfolio-api-prod` in `eu-central-1`), with
+separate DynamoDB tables and S3 prefixes so staging traffic never touches
+production data.
 
 ### Prerequisites
 
-- Node.js 20+ (`.nvmrc` will pin the exact version)
-- AWS account **`portfolio`**, account ID `776715560866`, in the target organization. This organization has **no AWS Identity Center** — access is via **role assumption**, not SSO. AWS CLI profile: **`portfolio`** (assumes `OrganizationAccountAccessRole` from the `rj.grajewski-admin` profile), default region `eu-central-1`.
-- Bedrock model access for Claude Haiku 4.5 — confirmed working **only** via the EU inference profile (`eu.anthropic.claude-haiku-4-5-20251001-v1:0`); the direct in-region model ID does not work. See [docs/ARCHITECTURE.md § Reasoning](docs/ARCHITECTURE.md#reasoning--amazon-bedrock-claude-haiku-45).
+- Node — the version is pinned by `.nvmrc`.
+- For anything that touches AWS (backend deploy, content sync, the
+  availability scripts): AWS CLI profile **`portfolio`** — account
+  `776715560866`, region `eu-central-1`. This org has **no AWS Identity
+  Center**; the profile assumes `OrganizationAccountAccessRole` from
+  `rj.grajewski-admin`. Prefix those commands with `AWS_PROFILE=portfolio`.
+  Bedrock access for Claude Haiku 4.5 is already enabled (EU inference
+  profile only — see [docs/ARCHITECTURE.md § Reasoning](docs/ARCHITECTURE.md#reasoning--amazon-bedrock-claude-haiku-45)).
+- Frontend-only work needs none of the above.
 
 ### Local development
 
 ```bash
 npm install
-npm run dev            # runs the frontend against the deployed dev backend
+npm run dev            # Vite dev server on http://localhost:5173
 ```
 
-### Deploy the backend (dev)
+The agent panel reads `VITE_AGENT_URL` from `frontend/.env.local` (copy
+`frontend/.env.example`). Leave it unset to work against the "assistant
+unavailable" fallback; set it to a `portfolio-api-<env>` stack's
+`AgentFunctionUrl` output to develop against a deployed backend.
+
+### Checks (what CI runs)
+
+```bash
+npm run typecheck --workspace=frontend
+npm run lint --workspace=frontend
+npm run build --workspace=frontend
+npm run typecheck --workspace=@portfolio/agent-fn
+npm run synth --workspace=backend/infra          # cdk synth, no AWS creds needed
+```
+
+### Deploy
+
+Frontend deploys are automatic — Amplify Hosting builds on push:
+
+- push to `dev` → `https://dev.daz9bpic9q3nd.amplifyapp.com` (staging)
+- push to `main` → `https://main.daz9bpic9q3nd.amplifyapp.com` (production)
+
+Backend deploys are manual so infra changes stay deliberate:
 
 ```bash
 cd backend/infra
-npm run deploy:dev     # cdk deploy of the dev stacks
+AWS_PROFILE=portfolio npm run deploy:dev     # cdk deploy --all --context env=dev
+AWS_PROFILE=portfolio npm run deploy:prod    # cdk deploy --all --context env=prod
 ```
 
-### Deploy the frontend
-
-Frontend deploys are handled by Amplify Hosting on push:
-
-- push to `dev` → staging URL
-- push to `main` → production URL
-
-CDK backend deploys stay manual (`npm run deploy:dev` / `deploy:prod`) so infra changes are always deliberate.
+`VITE_AGENT_URL` is set per branch in the Amplify console (each branch points
+at its own `portfolio-api-<env>` Function URL).
 
 ### Sync knowledge content
 
+The Lambda bundles a copy of `content/` at deploy time, so a `cdk deploy`
+already refreshes the corpus. This pushes it to the S3 prefix as well (the
+`CONTENT_BUCKET` seam, kept in step):
+
 ```bash
-npm run content:sync -- --env dev     # pushes content/ to the dev S3 prefix
+AWS_PROFILE=portfolio npm run content:sync -- --env dev     # or --env prod
 ```
 
-Dev and prod use separate S3 prefixes / DynamoDB tables so test queries never pollute real usage data.
+### AWS availability / cost scripts
+
+```bash
+AWS_PROFILE=portfolio npm run check-availability     # Bedrock / Polly / Transcribe in eu-central-1
+npm run estimate-cost                                # token math vs the ~$25 ceiling
+AWS_PROFILE=portfolio npm run verify-parallel-tools  # Haiku 4.5 parallel tool-use check
+```
 
 ---
 
