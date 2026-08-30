@@ -7,14 +7,12 @@ import { SectionShell } from "./SectionShell";
 import { Education } from "./sections/Education";
 import { Amazon } from "./sections/Amazon";
 import { FlowJob } from "./sections/FlowJob";
-import { Rhymind } from "./sections/Rhymind";
 import { PortfolioItself } from "./sections/PortfolioItself";
 
 const SECTION_CONTENT: Record<SectionId, ComponentType> = {
   education: Education,
   amazon: Amazon,
   flowjob: FlowJob,
-  rhymind: Rhymind,
   "portfolio-itself": PortfolioItself,
 };
 

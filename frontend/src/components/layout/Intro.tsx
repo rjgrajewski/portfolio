@@ -13,7 +13,7 @@ export function Intro() {
     <section className="layout-intro py-16 sm:py-24 lg:py-4">
       <Container className="flex flex-col items-center gap-4 text-center lg:max-w-none lg:flex-row lg:items-center lg:gap-4 lg:px-8 lg:text-left">
         <img
-          src="/img/portrait-placeholder.svg"
+          src="/img/portrait.jpg"
           alt=""
           className="h-24 w-24 shrink-0 rounded-full border border-neutral-800 lg:h-10 lg:w-10"
         />

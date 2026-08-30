@@ -1,20 +1,22 @@
-<!-- SEED CONTENT (Phase 2). Real detail lands in Phase 8. -->
 # Education — technical layer
 
-The parts of the CS degree that still show up in Rafal's work:
+The computer science degree (Uniwersytet WSB Merito, Wroclaw, 2024) is the
+formal grounding under work that is otherwise self-directed.
 
-- **Systems and operating systems** — how memory, scheduling, and I/O
-  actually behave, which is what makes latency and throughput arguments
-  concrete rather than hand-wavy.
-- **Data structures and algorithms** — not for interview puzzles, but for
-  knowing when a choice of structure is the difference between a design
-  that scales to zero and one that does not.
-- **Distributed systems** — consistency models, partial failure, idempotency.
-  Directly relevant to the serverless, event-driven architectures he
-  builds now.
-- **Databases** — relational modelling and indexing fundamentals, which
-  carry over to designing DynamoDB access patterns deliberately instead
-  of by trial and error.
+Where it shows up in practice:
 
-Coursework specifics, thesis topic, and any research work are still to be
-filled in here for Phase 8.
+- **Relational data modelling.** Visible directly in the Amazon analytics work
+  (Redshift, multi-step SQL transformations, reporting models) and in
+  flowjob.it's PostgreSQL schema, where the match score is a SQL query rather
+  than a machine-learning service.
+- **Reasoning about systems and cost.** flowjob.it and this portfolio are both
+  designed around explicit constraints — Lambda's 15-minute limit, a hard
+  monthly cost ceiling, "scale to zero when idle" — rather than reached for by
+  default.
+- **Enough theory to choose deliberately.** The recurring pattern in both
+  projects is picking the plain, cheap, correct option (prompting over
+  embeddings, SQL over ML, tool-fetch over a vector database) and being able to
+  defend the choice.
+
+Specific coursework, and any thesis or research work, are not documented here
+yet.

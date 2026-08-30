@@ -14,7 +14,7 @@ The core flow must work; it need not be polished. Concretely, by Tuesday:
 - [ ] Phase 1 complete (landing + manual click-through + CV download all work — this is the non-AI fallback)
 - [x] Phase 2 complete (agent answers questions in **text**, with real-but-minimal content) — deployed to dev, verified on the Amplify staging URL
 - [ ] Phase 3 complete (agent answer reveals the matching section, simultaneously)
-- [ ] Phase 8 at least **seeded with real content** for the flagship topics (FlowJob, Rhymind, Amazon, education) — full authoring can continue after
+- [ ] Phase 8 at least **seeded with real content** for the flagship topics (FlowJob, Amazon, education) — full authoring can continue after
 - [ ] Phase 6 fallbacks for the paths in the demo (Bedrock down → manual portfolio; slow → loading state)
 - [ ] **Monday evening: mini dry-run on the actual device and network the demo will use.** Explicitly confirm the **daily circuit-breaker threshold on prod is a per-env config value set high enough that it cannot trip mid-interview** — this is the one failure mode that would be actively caused by the abuse-protection design working as intended, and it must not happen live.
 
@@ -43,9 +43,9 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 - [x] Design pass: type scale, colour, spacing, motion language — **timeboxed**, done directly in `tailwind.config.ts`: near-monochrome dark neutral + one warm amber accent, Fraunces (headings only) + system-ui (everything else), a named `display/h1/h2/h3/body/small` type scale. Presentable, deliberately not the full Phase 9 bar — see `docs/DECISIONS.md`.
 - [x] Landing view: photo (SVG monogram placeholder) + short blurb (placeholder copy) in `Hero.tsx`, with the `AgentEntryTeaser` given the visually primary spot — agent-as-main-entry, not an afterthought — and a "Browse manually" control underneath.
-- [x] Section registry (`frontend/src/content/sections.ts`) — id/title/order for `education`, `amazon`, `flowjob`, `rhymind`, `portfolio-itself`.
+- [x] Section registry (`frontend/src/content/sections.ts`) — id/title/order for `education`, `amazon`, `flowjob`, `portfolio-itself`.
 - [x] `SectionShell` + reveal-in-place animation (the one code path for "show section X") — CSS `grid-template-rows` 0fr→1fr + opacity, no animation library, `prefers-reduced-motion` respected globally. State lives in `frontend/src/content/activeSectionStore.ts`, a plain module-level store (not React Context) specifically so Phase 3's `reveal_section` tool handler can call the exact same `revealSection()` function from outside the component tree. See `docs/DECISIONS.md`.
-- [x] Manual section components: Education, Amazon, FlowJob, Rhymind, Portfolio-itself — placeholder content, each flagging itself as seed content pending Phase 8.
+- [x] Manual section components: Education, Amazon, FlowJob, Portfolio-itself — placeholder content, each flagging itself as seed content pending Phase 8.
 - [x] CV download — real (generated placeholder) PDF at `frontend/public/cv/cv.pdf`, wired to a visible button in the sticky header.
 - [x] Responsive: desktop-primary, verified genuinely usable on a 375×812 mobile viewport (layout only at this stage — full-screen section takeover is Phase 3).
 - [x] Deploys clean to staging — pushed to `dev`, Amplify build `SUCCEED`, verified live at `https://dev.daz9bpic9q3nd.amplifyapp.com`: renders correctly, no console errors, `/cv/cv.pdf` serves `200` with the right content type and byte size.
@@ -57,7 +57,7 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 ## Phase 2 — Agent MVP (text only)
 
 - [x] `content/core/core.md` + `content/manifest.json` with seed content
-- [x] `content/topics/*.md` — minimal but real seed files for flagship topics (education / amazon / flowjob / rhymind × business + technical)
+- [x] `content/topics/*.md` — minimal but real seed files for flagship topics (education / amazon / flowjob × business + technical)
 - [x] Reasoning Lambda: assemble system prompt (persona + guardrails + core + manifest) → history → user turn; call Bedrock Haiku 4.5 **streaming** (`backend/functions/agent/`)
 - [x] `get_content(topic, layer)` tool — fetch from bundled files first, S3 next (`contentStore.ts`; S3 seam is a `CONTENT_BUCKET` env var away)
 - [x] Resolve **OQ-1** (tool-use sequencing vs. streaming, and the Lambda→browser wire format) — NDJSON `{text|action|done|error}` contract settled, two-model-call approach adopted; **parallel tool use confirmed** for Haiku 4.5 on Bedrock (`scripts/verify-parallel-tools.ts`, 6/6) so a "goes deep" turn is 2 model calls, not 3. Recorded in [DECISIONS.md](DECISIONS.md); OQ-1 retired from [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -152,7 +152,7 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 > The agent is only as good as its source material. This comes *after* the MVP build so the pipeline can be tested end to end early — but it is still **on the critical path for Tuesday** and must not be discovered late. A genuinely solid first pass across business + technical layers for four flagship topics plus STAR case studies is realistically **closer to a full day** than "a couple of hours". For Tuesday, minimal real seed content for the flagship topics (as already scoped in the [minimum bar](#tuesday-demo--minimum-bar)) is sufficient — full authoring for every layer can continue after the demo.
 
 - [ ] CV — the authoritative summary (feeds `core.md` and the PDF)
-- [ ] Per-topic write-ups, **business layer**: problem solved, why it mattered — Amazon, FlowJob, Rhymind, education
+- [ ] Per-topic write-ups, **business layer**: problem solved, why it mattered — Amazon, FlowJob, education
 - [ ] Per-topic write-ups, **technical layer**: stack, decisions, trade-offs
 - [ ] STAR case studies for the flagship projects (business + technical layers)
 - [ ] Thin personal / interests layer (`personal.md`)

@@ -15,8 +15,8 @@ Seeded in **Phase 2** with minimal-but-real content:
   available layers, a one-line summary of each, and the matching
   `reveal_section` id.
 - `topics/<topic>.<layer>.md` — depth files fetched one at a time by the
-  `get_content` tool. Phase 2 covers `education` / `amazon` / `flowjob` /
-  `rhymind`, each with a `business` and a `technical` layer.
+  `get_content` tool. Covers `education` / `amazon` / `flowjob` /
+  `portfolio-itself`, each with a `business` and a `technical` layer.
 
 These files are marked as seed content inline. The full authoring pass
 across every topic and layer (plus `star/` case studies, `personal.md`, and

@@ -1,22 +1,31 @@
-<!-- SEED CONTENT (Phase 2). Real detail lands in Phase 8. -->
 # Amazon — business layer
 
-Rafal worked as a software engineer at Amazon, building and operating
-production services inside a large-scale environment.
+Rafal has been at Amazon since 2018, across four roles in seven years. The arc
+is the point: he moved from front-line operations into workforce staffing, then
+into data — and now owns an analytics layer that a large part of Amazon's
+European hiring runs on.
 
-Why it matters for a hiring conversation:
+- **Associate Partner (2018–2021)** — the entry point, in operations.
+- **Workforce Staffing Specialist (2021–2022)** — supporting large-scale hourly
+  hiring.
+- **Workforce Staffing Manager (2022–2024)** — owning staffing operations at
+  scale: vendor management, attendance and attrition forecasting, partnership
+  with senior site leadership, and the rollout of internal IT / HR tooling.
+- **Business Analyst (2024–present)** — owning the analytical layer behind mass
+  recruitment across Europe.
 
-- **Real scale, real consequences.** Code he shipped ran under genuine
-  traffic, with on-call ownership — so "it works on my machine" was
-  never the bar. Operational quality (alarms, runbooks, rollbacks) was
-  part of the job, not an afterthought.
-- **Customer-obsession as a working practice, not a slogan.** Features
-  were justified by the problem they solved for a user, and scope was
-  cut to the smallest thing that delivered that.
-- **Working across teams.** Shipping anything at Amazon means aligning
-  with adjacent teams, service owners, and reviewers — he is used to
-  that friction and knows how to move through it.
+Why it matters in a hiring conversation:
 
-The technical layer covers the actual stack, the scale and on-call
-constraints, and how he operated what he owned. Specific team, product
-area, and dates are to be filled in for Phase 8.
+- **The scale is real.** The recruitment operation he supports runs at European
+  scale — hundreds of thousands of workers. Forecasts and reports that are
+  wrong at that size have immediate operational cost.
+- **He has run the operational side, not just measured it.** Before the analyst
+  role he was accountable for staffing delivery, vendors, and headcount
+  forecasts — so the data work is grounded in knowing what the numbers are
+  actually used for.
+- **Progression under one roof.** Four distinct roles at one company over seven
+  years is a record of being trusted with more, and of deliberately moving
+  toward data and engineering.
+
+Ask for the technical layer for the data stack — Redshift, SQL, the reporting
+models, and the dashboards.

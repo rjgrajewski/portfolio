@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "note": "Table of contents the agent sees (docs/ARCHITECTURE.md § Knowledge / content retrieval). For each topic: the layers available via get_content and a one-line summary of each. SEED CONTENT — Phase 2; full manifest with every topic/layer is Phase 8. 'sectionId' is the matching reveal_section target for that topic.",
+  "note": "Table of contents the agent sees (docs/ARCHITECTURE.md § Knowledge / content retrieval). For each topic: the layers available via get_content and a one-line summary of each. 'sectionId' is the matching reveal_section target for that topic.",
   "topics": [
     {
       "id": "education",
       "title": "Education",
       "sectionId": "education",
       "layers": {
-        "business": "Degree, institution, and what it was actually for.",
-        "technical": "The fundamentals from it that still shape how Rafal builds."
+        "business": "Rafal's CS degree (WSB Merito, Wroclaw, 2024) and the move from operations into engineering it formalised.",
+        "technical": "The fundamentals from it that still show up in how Rafal builds."
       }
     },
     {
@@ -16,8 +16,8 @@
       "title": "Amazon",
       "sectionId": "amazon",
       "layers": {
-        "business": "What Rafal owned at Amazon and why it mattered to the business.",
-        "technical": "The stack, the scale and on-call constraints, and how he operated it."
+        "business": "Four roles in seven years — operations to workforce staffing to owning the analytics layer behind Europe-wide mass recruitment.",
+        "technical": "The Redshift / SQL / data-modelling / dashboard stack, and the forecasting and internal-tooling work before it."
       }
     },
     {
@@ -25,17 +25,17 @@
       "title": "FlowJob",
       "sectionId": "flowjob",
       "layers": {
-        "business": "The problem FlowJob solves and the value of the AI-assisted flow.",
-        "technical": "The Bedrock reasoning design and the serverless architecture around it."
+        "business": "The problem flowjob.it solves — the skill profile as the filter — and where the product stands.",
+        "technical": "Argus and Minerva, the Bedrock skill-normalization pipeline, and the app around it, with the decisions behind each."
       }
     },
     {
-      "id": "rhymind",
-      "title": "Rhymind",
-      "sectionId": "rhymind",
+      "id": "portfolio-itself",
+      "title": "This Portfolio",
+      "sectionId": "portfolio-itself",
       "layers": {
-        "business": "What Rhymind is, who it is for, and why Rafal built it.",
-        "technical": "The AWS-native architecture and the end-to-end build."
+        "business": "Why this portfolio is built as a working agentic system, and the cost ceiling that shaped it.",
+        "technical": "Bedrock Haiku 4.5, the agentic reveal UI, tool-fetch knowledge retrieval with no vector store, and the cost guardrails."
       }
     }
   ]

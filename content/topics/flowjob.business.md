@@ -1,25 +1,54 @@
-<!-- SEED CONTENT (Phase 2). Real detail lands in Phase 8. -->
-# FlowJob — business layer
+# flowjob.it — business layer
 
-FlowJob is an AI-assisted product that Rafal contributed to, built
-around Amazon Bedrock (Claude).
+flowjob.it is an IT job-search product Rafal Grajewski built for himself first.
+It is live and he uses it, but it has not been announced and has no real users.
+It has run as an evening project since October 2025 — a portfolio piece with
+commercial potential, not a business.
 
-The problem it addresses: a workflow that used to require a person to
-read, interpret, and act on unstructured input — slow, inconsistent,
-and hard to scale — is handled by a language model that does the
-interpretation step, with the human kept in the loop for judgement
-rather than grunt work.
+The idea: instead of another job board, put a **logical layer between the
+candidate and the listing**. Job ads become structured data — parsed,
+normalized, queryable — rather than text to skim.
 
-Why it mattered:
+## The problem
 
-- It turned a manual bottleneck into something that scales with usage
-  instead of headcount.
-- The AI is applied to the part of the flow where it is genuinely
-  better than a rule engine (fuzzy, natural-language input) and kept
-  away from the parts where determinism matters.
-- It was Rafal's first production Bedrock work, and it is the reason
-  this portfolio is also on Bedrock — a second, deliberate proof point.
+Job boards promise "roles for you" and then surface a listing because you
+happen to know SQL, sitting next to requirements for fluent Swedish and five
+years of AWS. flowjob inverts that: the candidate's **skill profile is the
+filter**, and every listing is scored against it.
 
-Ask for the technical layer for the reasoning design and the serverless
-architecture around it. Product name specifics, the exact workflow, and
-outcome metrics are to be filled in for Phase 8.
+The audience is IT candidates. Listings come from JustJoin.it. The job list is
+public; the skill profile and CV need an account.
+
+## What exists today
+
+1. **Job board** — filters plus a match score: the share of a listing's
+   required skills the profile covers. Skills the candidate marks "avoid" drop
+   the listing entirely.
+2. **Swipe-style skill selector** — know it / avoid / show on CV / skip, one
+   skill at a time. The dictionary holds several thousand entries, which made
+   dropdowns unusable.
+3. **In-browser PDF CV** — skills chosen in the deck flow into the document.
+   Solid on desktop, weak on mobile.
+4. Rounded public counts of listings and skills. A fuller market dashboard —
+   salary trends, skill demand over time — is planned, not built.
+
+Not built yet: one-click CV tailoring to a specific listing, and any AI beyond
+the skill-overlap matching.
+
+## Why it is not public yet
+
+The interface does not meet Rafal's bar — rough edges, and CV creation is
+awkward on a phone. The current work is a UI refactor. Security has no known
+hole, but there has been no audit yet; that is planned as the last step before
+launch, along with a finished legal layer. Privacy and cookie pages already
+exist.
+
+## Traction
+
+At AWS Summit Warsaw, Amazon backed the project with USD 1,000, with a path to
+more funding after launch once there is real traffic.
+
+The honest summary: the hardest problem already solved was making skill names
+from messy job ads consistent enough to match on; the hardest current fight is
+the UI. What Rafal says he would not do again is leave documentation until
+later — a habit he corrected on this portfolio.

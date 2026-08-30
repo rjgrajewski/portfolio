@@ -1,20 +1,23 @@
-<!-- SEED CONTENT (Phase 2). Real detail lands in Phase 8. -->
 # Education — business layer
 
-Rafal holds a computer science degree. The point of it, in hindsight,
-was less the credential and more the grounding: enough theory to reason
-about systems from first principles rather than by cargo-culting
-patterns.
+Rafal holds a **computer science degree** from Uniwersytet WSB Merito in
+Wroclaw, completed in **2024**.
 
-For a hiring conversation the relevant takeaways are:
+The interesting part is the timing. He started his career in sales and account
+management (2014–2018), moved into operations and workforce staffing at Amazon,
+and studied computer science alongside that work — finishing the degree while
+employed as a staffing manager. It was a deliberate move from operations toward
+engineering, not a first qualification.
 
-- He can pick up an unfamiliar domain quickly because the fundamentals
-  transfer — a queue is a queue whether it is in a textbook or in
-  production.
-- He is comfortable with ambiguity in problem definition, which is what
-  most of the degree's project work actually trained.
-- The degree is a floor, not the story. The projects since (Amazon,
-  FlowJob, Rhymind) are where the practical judgement came from.
+For a hiring conversation:
 
-Ask for the technical layer if you want the specific coursework and the
-parts that still show up in how he designs things.
+- The degree is the formal half of a career change that also shows up in the
+  work: the shift into a Business Analyst role built on SQL and data modelling,
+  and the solo AWS builds (flowjob.it, this portfolio) that followed.
+- Studying while delivering a full-time operational job is the pattern here —
+  the same pattern as shipping flowjob.it as an evening project.
+- It is a foundation, not the headline. The projects since are where the
+  practical judgement comes from.
+
+Ask for the technical layer for the fundamentals that still show up in how he
+builds.

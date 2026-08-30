@@ -46,7 +46,7 @@ const TOOLS: Tool[] = [
           properties: {
             topic: {
               type: "string",
-              enum: ["education", "amazon", "flowjob", "rhymind"],
+              enum: ["education", "amazon", "flowjob", "portfolio-itself"],
             },
             layer: { type: "string", enum: ["business", "technical"] },
           },
@@ -67,13 +67,7 @@ const TOOLS: Tool[] = [
           properties: {
             sectionId: {
               type: "string",
-              enum: [
-                "education",
-                "amazon",
-                "flowjob",
-                "rhymind",
-                "portfolio-itself",
-              ],
+              enum: ["education", "amazon", "flowjob", "portfolio-itself"],
             },
           },
           required: ["sectionId"],

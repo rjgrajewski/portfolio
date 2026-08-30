@@ -3,7 +3,7 @@
 A single-page portfolio that a recruiter can engage with three ways:
 
 1. **Download a CV** — a traditional PDF, for people who just want the artifact.
-2. **Browse manually** — an interactive click-through portfolio (Education, Amazon, FlowJob, Rhymind, …).
+2. **Browse manually** — an interactive click-through portfolio (Education, Amazon, FlowJob, …).
 3. **Talk to an AI agent** (voice or text) — it answers questions about the candidate in the third person *and* opens the relevant portfolio section in sync with its spoken answer.
 
 The AI and the manual click-through drive the **same** underlying content and UI. The agent is an alternate way of navigating the portfolio, not a separate feature bolted on. The portfolio itself is intended to double as a working demonstration of agentic AI design.

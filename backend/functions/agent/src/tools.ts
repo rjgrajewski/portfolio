@@ -17,7 +17,12 @@
 
 import type { Tool } from "@aws-sdk/client-bedrock-runtime";
 
-export const TOPIC_IDS = ["education", "amazon", "flowjob", "rhymind"] as const;
+export const TOPIC_IDS = [
+  "education",
+  "amazon",
+  "flowjob",
+  "portfolio-itself",
+] as const;
 export const LAYERS = ["business", "technical"] as const;
 
 /**
@@ -30,7 +35,6 @@ export const SECTION_IDS = [
   "education",
   "amazon",
   "flowjob",
-  "rhymind",
   "portfolio-itself",
 ] as const;
 

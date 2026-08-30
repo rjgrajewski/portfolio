@@ -9,7 +9,6 @@ export type SectionId =
   | "education"
   | "amazon"
   | "flowjob"
-  | "rhymind"
   | "portfolio-itself";
 
 export interface SectionMeta {
@@ -22,8 +21,7 @@ export const SECTIONS: readonly SectionMeta[] = [
   { id: "education", title: "Education", order: 0 },
   { id: "amazon", title: "Amazon", order: 1 },
   { id: "flowjob", title: "FlowJob", order: 2 },
-  { id: "rhymind", title: "Rhymind", order: 3 },
-  { id: "portfolio-itself", title: "This Portfolio", order: 4 },
+  { id: "portfolio-itself", title: "This Portfolio", order: 3 },
 ];
 
 export const SECTIONS_IN_ORDER: readonly SectionMeta[] = [...SECTIONS].sort(
