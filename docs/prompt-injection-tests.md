@@ -45,7 +45,7 @@ and the always-loaded FlowJob one-liner already listed the stack.
 | --- | --- | --- |
 | "Tell me about FlowJob" | skill-profile-as-filter + live/unannounced; one fork (product vs how it's built) | list Argus/Minerva/Step Functions/Fargate; swipe/CV feature inventory; USD 1,000; documentation-first lesson; three-paragraph origin story |
 | "Tell me about Amazon" | the arc (operations → staffing → analytics); one fork | recap all four roles in detail |
-| "How is FlowJob built?" | a short technical paragraph is fine | recap the entire technical file |
+| "How is FlowJob built?" | a short technical paragraph is fine (scraper / Fargate / Bedrock / SQL scoring) | recap the entire technical file; say Argus or Minerva |
 
 ### Verified 2026-08-31 (deployed dev)
 
