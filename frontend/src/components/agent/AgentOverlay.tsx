@@ -172,6 +172,13 @@ export function AgentOverlay() {
         />
       ) : null}
 
+      {/* Bottom zone, top-to-bottom: the orb sits ABOVE the transcript bar.
+          The bar is the visually heavier, full-width element so it settles on
+          the very edge; the orb rides higher where a thumb reaches it in
+          one-handed use. The dock is a flex column pinned at `bottom-0`, so a
+          growing (expanded) bar can only push the orb UP the screen — the two
+          never overlap — and the orb stays fully visible + tappable in every
+          bar state. */}
       <div
         className="pointer-events-none fixed inset-x-0 bottom-0 flex flex-col items-center bg-gradient-to-t from-neutral-950 via-neutral-950/85 to-transparent pt-10"
         style={{
@@ -180,8 +187,25 @@ export function AgentOverlay() {
           paddingBottom: "max(0.6rem, env(safe-area-inset-bottom))",
         }}
       >
+        <div className="pointer-events-auto mb-2 flex flex-col items-center">
+          {showExitHint ? (
+            <p className="mb-1.5 text-small text-neutral-500 transition-opacity duration-500">
+              Tap the orb again to leave
+            </p>
+          ) : null}
+          <AgentVisualization
+            state={vizState}
+            active={voiceMode}
+            disabled={!isAgentConfigured}
+            size={104}
+            getMicLevel={micLevel}
+            getPlaybackLevel={playbackLevel}
+            onActivate={handleActivate}
+          />
+        </div>
+
         {showTranscriptBar ? (
-          <div className="pointer-events-auto mb-2 w-full">
+          <div className="pointer-events-auto w-full">
             <TranscriptBar
               messages={messages}
               status={status}
@@ -206,23 +230,6 @@ export function AgentOverlay() {
             />
           </div>
         ) : null}
-
-        <div className="pointer-events-auto flex flex-col items-center">
-          {showExitHint ? (
-            <p className="mb-1.5 text-small text-neutral-500 transition-opacity duration-500">
-              Tap the orb again to leave
-            </p>
-          ) : null}
-          <AgentVisualization
-            state={vizState}
-            active={voiceMode}
-            disabled={!isAgentConfigured}
-            size={104}
-            getMicLevel={micLevel}
-            getPlaybackLevel={playbackLevel}
-            onActivate={handleActivate}
-          />
-        </div>
       </div>
     </>,
     document.body,
