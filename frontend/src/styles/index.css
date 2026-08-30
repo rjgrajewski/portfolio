@@ -3,6 +3,26 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * The one place z-index is decided. Everything positioned in this app
+   * reads a name from here — no scattered magic numbers.
+   *
+   *   content            0 (auto)   portfolio sections, footer
+   *   --z-header         20         sticky header
+   *   --z-section-takeover 40       mobile full-screen section reveal
+   *   --z-ai-frame       50         AI-mode frame — ABOVE the takeover, so
+   *                                 the agent is visibly present while a
+   *                                 section it opened is on screen
+   *   --z-agent-dock     60         the visualization + transcript bar —
+   *                                 always the top layer during a conversation
+   */
+  :root {
+    --z-header: 20;
+    --z-section-takeover: 40;
+    --z-ai-frame: 50;
+    --z-agent-dock: 60;
+  }
+
   html {
     scroll-behavior: smooth;
   }
@@ -56,33 +76,35 @@
   }
 
   /*
-   * AI-mode frame — a subtle inset border around the whole viewport while
+   * AI-mode frame — an inset amber border around the whole viewport while
    * the agent is active. Communicates "the agent is driving the interface"
-   * (which is why sections open on their own). Pointer-transparent, above
-   * content but below the mobile section takeover (z-40). Breathes very
-   * slightly; static under reduced motion.
+   * (which is why sections open on their own). Pointer-transparent, and
+   * ABOVE the mobile section takeover so the agent stays visibly present
+   * over a section it just opened. Breathes slightly; static under reduced
+   * motion. `translateZ(0)` keeps it a stable compositing layer on iOS.
    */
   .ai-frame {
     position: fixed;
     inset: 0;
-    z-index: 30;
+    z-index: var(--z-ai-frame);
     pointer-events: none;
+    transform: translateZ(0);
     box-shadow:
-      inset 0 0 0 1px rgba(232, 163, 61, 0.28),
-      inset 0 0 44px rgba(232, 163, 61, 0.05);
+      inset 0 0 0 2px rgba(232, 163, 61, 0.5),
+      inset 0 0 32px rgba(232, 163, 61, 0.1);
     animation: ai-frame-breathe 6s ease-in-out infinite;
   }
   .ai-frame[data-viz="listening"],
   .ai-frame[data-viz="speaking"] {
     box-shadow:
-      inset 0 0 0 1px rgba(242, 182, 88, 0.42),
-      inset 0 0 60px rgba(232, 163, 61, 0.08);
+      inset 0 0 0 2px rgba(242, 182, 88, 0.72),
+      inset 0 0 48px rgba(232, 163, 61, 0.16);
   }
 
   @keyframes ai-frame-breathe {
     0%,
     100% {
-      opacity: 0.75;
+      opacity: 0.7;
     }
     50% {
       opacity: 1;

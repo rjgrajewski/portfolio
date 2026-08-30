@@ -7,7 +7,10 @@ import { LinkButton } from "../ui/LinkButton";
  */
 export function Header() {
   return (
-    <header className="sticky top-0 z-20 border-b border-neutral-900 bg-neutral-950/80 backdrop-blur">
+    <header
+      style={{ zIndex: "var(--z-header)" }}
+      className="sticky top-0 border-b border-neutral-900 bg-neutral-950/80 backdrop-blur"
+    >
       <div className="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
         <span className="text-small font-medium tracking-wide text-neutral-300">
           Rafal Grajewski

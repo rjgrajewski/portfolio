@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { isAgentConfigured, isVoiceConfigured } from "../../config/runtime";
 import { useConversation } from "../../agent/useConversation";
 import { deriveDegradation } from "../../agent/degradation";
@@ -89,13 +90,22 @@ export function AgentOverlay() {
   // dock's expanded panel compete.
   const allowExpand = isDesktop || !activeSection;
 
-  return (
+  // Rendered into <body>, not into the app tree — so the fixed positioning
+  // can never be re-based by an ancestor that becomes a containing block
+  // (transform / filter / contain / backdrop-filter), and the z-index sits
+  // cleanly above the section takeover. `translateZ(0)` keeps iOS Safari
+  // compositing the dock as its own layer so it doesn't drift on momentum
+  // scroll.
+  return createPortal(
     <>
       {voiceMode ? (
         <div className="ai-frame" data-viz={vizState} aria-hidden="true" />
       ) : null}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex flex-col items-center bg-gradient-to-t from-neutral-950 via-neutral-950/85 to-transparent pt-10">
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-0 flex flex-col items-center bg-gradient-to-t from-neutral-950 via-neutral-950/85 to-transparent pt-10"
+        style={{ zIndex: "var(--z-agent-dock)", transform: "translateZ(0)" }}
+      >
         <div className="pointer-events-auto mb-2 flex flex-col items-center gap-1">
           <AgentVisualization
             state={vizState}
@@ -142,6 +152,7 @@ export function AgentOverlay() {
           />
         ) : null}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
