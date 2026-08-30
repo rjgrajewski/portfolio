@@ -76,12 +76,20 @@
   }
 
   /*
-   * AI-mode frame — an inset amber border around the whole viewport while
-   * the agent is active. Communicates "the agent is driving the interface"
-   * (which is why sections open on their own). Pointer-transparent, and
-   * ABOVE the mobile section takeover so the agent stays visibly present
-   * over a section it just opened. Breathes slightly; static under reduced
-   * motion. `translateZ(0)` keeps it a stable compositing layer on iOS.
+   * AI-mode glow — amber light spilling in from every screen edge while the
+   * agent is active, fading gently toward the centre. NO hard line. This is
+   * a state signal, not decoration: it is the main thing that tells a
+   * visitor "a conversation is live" vs. "the orb is waiting for a tap"
+   * (the orb at rest and listening-in-silence look alike on their own), so
+   * it is deliberately strong — calm but not missable at arm's length on a
+   * phone.
+   *
+   * Rendered ABOVE the mobile section takeover so the agent stays present
+   * over a section it opened. `translateZ(0)` keeps it a stable iOS
+   * compositing layer. Its opacity is driven per-frame by AgentOverlay
+   * (slow breathe + a lift with mic/playback amplitude) so it reads as one
+   * system with the orb; `--ai-glow` is that live value, with a static
+   * fallback for the first paint / reduced motion.
    */
   .ai-frame {
     position: fixed;
@@ -89,32 +97,28 @@
     z-index: var(--z-ai-frame);
     pointer-events: none;
     transform: translateZ(0);
-    box-shadow:
-      inset 0 0 0 2px rgba(232, 163, 61, 0.5),
-      inset 0 0 32px rgba(232, 163, 61, 0.1);
-    animation: ai-frame-breathe 6s ease-in-out infinite;
+    opacity: var(--ai-glow, 0.82);
+    /* A radial vignette so the light is an EDGE effect that fades to clean
+       in the centre — it scales with the viewport aspect (unlike a blur,
+       which overlaps across a narrow phone). Plus a tight bright rim right
+       at the edge from the box-shadow. */
+    background: radial-gradient(
+      ellipse 118% 112% at 50% 50%,
+      transparent 46%,
+      rgba(232, 163, 61, 0.15) 78%,
+      rgba(232, 163, 61, 0.4) 100%
+    );
+    box-shadow: inset 0 0 42px 0 rgba(242, 182, 88, 0.32);
   }
   .ai-frame[data-viz="listening"],
   .ai-frame[data-viz="speaking"] {
-    box-shadow:
-      inset 0 0 0 2px rgba(242, 182, 88, 0.72),
-      inset 0 0 48px rgba(232, 163, 61, 0.16);
+    background: radial-gradient(
+      ellipse 118% 112% at 50% 50%,
+      transparent 43%,
+      rgba(232, 163, 61, 0.24) 74%,
+      rgba(242, 182, 88, 0.6) 100%
+    );
+    box-shadow: inset 0 0 54px 0 rgba(242, 182, 88, 0.52);
   }
 
-  @keyframes ai-frame-breathe {
-    0%,
-    100% {
-      opacity: 0.7;
-    }
-    50% {
-      opacity: 1;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ai-frame {
-      animation: none;
-      opacity: 1;
-    }
-  }
 }

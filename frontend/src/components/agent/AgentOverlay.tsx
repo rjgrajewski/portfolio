@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { isAgentConfigured, isVoiceConfigured } from "../../config/runtime";
 import { useConversation } from "../../agent/useConversation";
 import { deriveDegradation } from "../../agent/degradation";
 import { useActiveSection } from "../../hooks/useActiveSection";
 import { useIsDesktop } from "../../hooks/useIsDesktop";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { AgentVisualization, type VizState } from "./AgentVisualization";
 import { TranscriptBar } from "./TranscriptBar";
 
@@ -85,6 +86,44 @@ export function AgentOverlay() {
   const busy = status === "thinking" || status === "streaming";
   const inputEnabled = canSend && degradation.canRetry;
 
+  // Drive the AI-mode glow's opacity per frame: a slow always-on breathe
+  // (proves a conversation is live) plus a lift with mic/playback amplitude
+  // (so the screen edge and the orb move on the same signal — one system).
+  const frameRef = useRef<HTMLDivElement>(null);
+  const reducedMotion = useReducedMotion();
+  const loopInputs = useRef({ listening, speaking, micLevel, playbackLevel, reducedMotion });
+  loopInputs.current = { listening, speaking, micLevel, playbackLevel, reducedMotion };
+  useEffect(() => {
+    if (!voiceMode) return;
+    let raf = 0;
+    let lvl = 0;
+    const start = performance.now();
+    const tick = (now: number): void => {
+      raf = requestAnimationFrame(tick);
+      const el = frameRef.current;
+      if (!el || document.hidden) return;
+      const i = loopInputs.current;
+      if (i.reducedMotion) {
+        el.style.setProperty("--ai-glow", "0.92"); // strong + static
+        return;
+      }
+      const raw = i.listening
+        ? i.micLevel()
+        : i.speaking
+          ? i.playbackLevel()
+          : 0;
+      lvl += (raw - lvl) * 0.25;
+      const breathe =
+        0.09 * (0.5 + 0.5 * Math.sin(((now - start) / 1000) * 0.9));
+      el.style.setProperty(
+        "--ai-glow",
+        String(Math.min(1, 0.78 + breathe + lvl * 0.28)),
+      );
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [voiceMode]);
+
   const vizState: VizState =
     degradation.mode === "unconfigured"
       ? "rest"
@@ -125,7 +164,12 @@ export function AgentOverlay() {
   return createPortal(
     <>
       {voiceMode ? (
-        <div className="ai-frame" data-viz={vizState} aria-hidden="true" />
+        <div
+          ref={frameRef}
+          className="ai-frame"
+          data-viz={vizState}
+          aria-hidden="true"
+        />
       ) : null}
 
       <div
@@ -173,7 +217,7 @@ export function AgentOverlay() {
             state={vizState}
             active={voiceMode}
             disabled={!isAgentConfigured}
-            size={76}
+            size={96}
             getMicLevel={micLevel}
             getPlaybackLevel={playbackLevel}
             onActivate={handleActivate}

@@ -113,6 +113,22 @@ const CAPTION: Record<VizState, string> = {
   error: "Voice unavailable",
 };
 
+/**
+ * The "conversation is live" states — listening / thinking / speaking — each
+ * get a halo (a soft corona + an orbiting ring) that rest and error do NOT
+ * have at all. So rest reads as a small quiet dot; the moment the agent is
+ * engaged the orb visibly opens up, even in total silence. `levelReact`
+ * ties the corona + ring to the same mic/playback amplitude the AI-mode
+ * glow reacts to, so the orb and the screen edge move together.
+ */
+const HALO: Partial<
+  Record<VizState, { ring: number; ringSpd: number; corona: number; react: number }>
+> = {
+  listening: { ring: 1.28, ringSpd: 2.6, corona: 0.16, react: 0.85 },
+  thinking: { ring: 1.18, ringSpd: 1.7, corona: 0.11, react: 0 },
+  speaking: { ring: 1.34, ringSpd: 2.2, corona: 0.2, react: 1 },
+};
+
 function drawBlob(
   ctx: CanvasRenderingContext2D,
   px: number,
@@ -123,11 +139,34 @@ function drawBlob(
   const p = PARAMS[state];
   const cx = px / 2;
   const cy = px / 2;
-  const maxR = px * 0.42;
-  const dprLine = Math.max(1, px / 88);
+  const maxR = px * 0.34;
+  const dprLine = Math.max(1, px / 96);
 
   ctx.clearRect(0, 0, px, px);
 
+  const halo = HALO[state];
+
+  // --- corona (behind the blob) --------------------------------------
+  if (halo) {
+    const boost = level * 0.3 * halo.react;
+    const cg = ctx.createRadialGradient(
+      cx,
+      cy,
+      maxR * 0.5,
+      cx,
+      cy,
+      maxR * 1.45,
+    );
+    cg.addColorStop(0, `rgba(242,182,88,${halo.corona + boost})`);
+    cg.addColorStop(0.55, `rgba(232,163,61,${(halo.corona + boost) * 0.45})`);
+    cg.addColorStop(1, "rgba(232,163,61,0)");
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR * 1.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // --- the blob ----------------------------------------------------
   const N = 72;
   ctx.beginPath();
   for (let i = 0; i <= N; i++) {
@@ -152,8 +191,8 @@ function drawBlob(
   }
 
   const g = ctx.createRadialGradient(cx, cy, maxR * 0.1, cx, cy, maxR * 1.08);
-  g.addColorStop(0, `rgba(242,182,88,${0.4 * p.alpha})`);
-  g.addColorStop(0.6, `rgba(232,163,61,${0.17 * p.alpha})`);
+  g.addColorStop(0, `rgba(242,182,88,${0.42 * p.alpha})`);
+  g.addColorStop(0.6, `rgba(232,163,61,${0.18 * p.alpha})`);
   g.addColorStop(1, "rgba(232,163,61,0)");
   ctx.fillStyle = g;
   ctx.fill();
@@ -162,11 +201,17 @@ function drawBlob(
   ctx.strokeStyle = `rgba(242,182,88,${0.62 * p.alpha})`;
   ctx.stroke();
 
-  if (state === "listening") {
-    // a faint open outer ring — "receiving"
+  // --- ring (in front) — a distinct faster pulse than the blob's breath
+  if (halo) {
+    const rr =
+      maxR *
+      (halo.ring +
+        0.06 * Math.sin(t * halo.ringSpd) +
+        level * 0.22 * halo.react);
     ctx.beginPath();
-    ctx.arc(cx, cy, maxR * (p.r0 + 0.22 + level * 0.1), 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(232,163,61,${0.18 * p.alpha})`;
+    ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+    ctx.lineWidth = dprLine * 1.4;
+    ctx.strokeStyle = `rgba(242,182,88,${0.4 + level * 0.35 * halo.react})`;
     ctx.stroke();
   }
 }
