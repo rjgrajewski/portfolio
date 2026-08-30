@@ -217,7 +217,7 @@ export function AgentOverlay() {
             state={vizState}
             active={voiceMode}
             disabled={!isAgentConfigured}
-            size={96}
+            size={104}
             getMicLevel={micLevel}
             getPlaybackLevel={playbackLevel}
             onActivate={handleActivate}

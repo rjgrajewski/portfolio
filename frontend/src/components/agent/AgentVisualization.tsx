@@ -115,18 +115,23 @@ const CAPTION: Record<VizState, string> = {
 
 /**
  * The "conversation is live" states — listening / thinking / speaking — each
- * get a halo (a soft corona + an orbiting ring) that rest and error do NOT
- * have at all. So rest reads as a small quiet dot; the moment the agent is
- * engaged the orb visibly opens up, even in total silence. `levelReact`
- * ties the corona + ring to the same mic/playback amplitude the AI-mode
- * glow reacts to, so the orb and the screen edge move together.
+ * get a halo: a soft corona plus ONE orbiting ring pulsing at a distinct
+ * faster rhythm than the blob's breath. rest and error have neither, so the
+ * moment the agent engages the orb visibly opens up even in total silence.
+ *
+ * There is exactly one ring — the blob itself has NO outline stroke, just a
+ * luminous gradient with a bright core, so it never reads as a second
+ * circle. Every drawn radius is clamped inside the canvas (`R()` below) so
+ * nothing clips, even at peak mic/playback amplitude. `react` ties the
+ * corona + ring to the same level the AI-mode glow reacts to — orb and
+ * screen edge move together.
  */
 const HALO: Partial<
   Record<VizState, { ring: number; ringSpd: number; corona: number; react: number }>
 > = {
-  listening: { ring: 1.28, ringSpd: 2.6, corona: 0.16, react: 0.85 },
-  thinking: { ring: 1.18, ringSpd: 1.7, corona: 0.11, react: 0 },
-  speaking: { ring: 1.34, ringSpd: 2.2, corona: 0.2, react: 1 },
+  listening: { ring: 1.24, ringSpd: 2.4, corona: 0.15, react: 0.8 },
+  thinking: { ring: 1.14, ringSpd: 1.6, corona: 0.1, react: 0 },
+  speaking: { ring: 1.3, ringSpd: 2.1, corona: 0.19, react: 1 },
 };
 
 function drawBlob(
@@ -139,8 +144,11 @@ function drawBlob(
   const p = PARAMS[state];
   const cx = px / 2;
   const cy = px / 2;
-  const maxR = px * 0.34;
-  const dprLine = Math.max(1, px / 96);
+  const maxR = px * 0.3;
+  const dprLine = Math.max(1, px / 104);
+  // Hard ceiling so nothing is ever drawn past the canvas edge.
+  const LIMIT = px * 0.47;
+  const R = (mult: number): number => Math.min(LIMIT, maxR * mult);
 
   ctx.clearRect(0, 0, px, px);
 
@@ -148,32 +156,26 @@ function drawBlob(
 
   // --- corona (behind the blob) --------------------------------------
   if (halo) {
-    const boost = level * 0.3 * halo.react;
-    const cg = ctx.createRadialGradient(
-      cx,
-      cy,
-      maxR * 0.5,
-      cx,
-      cy,
-      maxR * 1.45,
-    );
+    const boost = level * 0.28 * halo.react;
+    const outer = R(1.36 + level * 0.08 * halo.react);
+    const cg = ctx.createRadialGradient(cx, cy, maxR * 0.5, cx, cy, outer);
     cg.addColorStop(0, `rgba(242,182,88,${halo.corona + boost})`);
     cg.addColorStop(0.55, `rgba(232,163,61,${(halo.corona + boost) * 0.45})`);
     cg.addColorStop(1, "rgba(232,163,61,0)");
     ctx.fillStyle = cg;
     ctx.beginPath();
-    ctx.arc(cx, cy, maxR * 1.45, 0, Math.PI * 2);
+    ctx.arc(cx, cy, outer, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // --- the blob ----------------------------------------------------
+  // --- the blob (gradient fill only — no outline stroke) -----------
   const N = 72;
   ctx.beginPath();
   for (let i = 0; i <= N; i++) {
     const th = (i / N) * Math.PI * 2;
     let rr = p.r0 + p.breathA * Math.sin(t * p.breathW) + p.levelK * level;
     for (const lb of p.lobes) rr += lb.a * Math.sin(lb.k * th + t * lb.spd);
-    const r = maxR * rr;
+    const r = R(rr);
     const x = cx + Math.cos(th) * r;
     const y = cy + Math.sin(th) * r;
     if (i === 0) ctx.moveTo(x, y);
@@ -182,7 +184,7 @@ function drawBlob(
   ctx.closePath();
 
   if (state === "error") {
-    ctx.fillStyle = `rgba(120,120,120,${0.12 * p.alpha})`;
+    ctx.fillStyle = `rgba(120,120,120,${0.14 * p.alpha})`;
     ctx.fill();
     ctx.lineWidth = dprLine;
     ctx.strokeStyle = `rgba(150,150,150,${0.5 * p.alpha})`;
@@ -190,28 +192,23 @@ function drawBlob(
     return;
   }
 
-  const g = ctx.createRadialGradient(cx, cy, maxR * 0.1, cx, cy, maxR * 1.08);
-  g.addColorStop(0, `rgba(242,182,88,${0.42 * p.alpha})`);
-  g.addColorStop(0.6, `rgba(232,163,61,${0.18 * p.alpha})`);
+  const g = ctx.createRadialGradient(cx, cy, maxR * 0.05, cx, cy, maxR);
+  g.addColorStop(0, `rgba(255,214,150,${0.6 * p.alpha})`);
+  g.addColorStop(0.42, `rgba(242,182,88,${0.34 * p.alpha})`);
+  g.addColorStop(0.78, `rgba(232,163,61,${0.12 * p.alpha})`);
   g.addColorStop(1, "rgba(232,163,61,0)");
   ctx.fillStyle = g;
   ctx.fill();
 
-  ctx.lineWidth = dprLine * 1.1;
-  ctx.strokeStyle = `rgba(242,182,88,${0.62 * p.alpha})`;
-  ctx.stroke();
-
-  // --- ring (in front) — a distinct faster pulse than the blob's breath
+  // --- the ONE ring (in front) — faster pulse than the blob's breath
   if (halo) {
-    const rr =
-      maxR *
-      (halo.ring +
-        0.06 * Math.sin(t * halo.ringSpd) +
-        level * 0.22 * halo.react);
+    const rr = R(
+      halo.ring + 0.04 * Math.sin(t * halo.ringSpd) + level * 0.12 * halo.react,
+    );
     ctx.beginPath();
     ctx.arc(cx, cy, rr, 0, Math.PI * 2);
     ctx.lineWidth = dprLine * 1.4;
-    ctx.strokeStyle = `rgba(242,182,88,${0.4 + level * 0.35 * halo.react})`;
+    ctx.strokeStyle = `rgba(242,182,88,${Math.min(0.85, 0.4 + level * 0.35 * halo.react)})`;
     ctx.stroke();
   }
 }
@@ -223,7 +220,7 @@ export function AgentVisualization({
   getPlaybackLevel,
   onActivate,
   disabled = false,
-  size = 88,
+  size = 104,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const reducedMotion = useReducedMotion();

@@ -3,7 +3,6 @@ import { Intro } from "./components/layout/Intro";
 import { PortfolioSections } from "./components/portfolio/PortfolioSections";
 import { Footer } from "./components/layout/Footer";
 import { AgentOverlay } from "./components/agent/AgentOverlay";
-import { VizAudit } from "./components/agent/_VizAudit";
 
 /**
  * Single-column portfolio (docs/ARCHITECTURE.md § Product shape, rewritten).
@@ -14,12 +13,6 @@ import { VizAudit } from "./components/agent/_VizAudit";
  * desktop accordion or mobile takeover.
  */
 export default function App() {
-  if (
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).has("vizaudit")
-  ) {
-    return <VizAudit />;
-  }
   return (
     <div className="app-shell">
       <Header />

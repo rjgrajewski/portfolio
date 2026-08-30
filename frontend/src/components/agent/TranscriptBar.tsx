@@ -17,7 +17,7 @@ interface Props {
   onToggleExpanded: () => void;
   showExpandControl: boolean;
 
-  /** Plain text fallback — deliberately NOT styled into the voice aesthetic. */
+  /** Plain text fallback — reachable, but a quiet control, not a voice element. */
   textOpen: boolean;
   onToggleText: () => void;
   canSend: boolean;
@@ -28,15 +28,24 @@ interface Props {
 
 /**
  * Transcript, hidden by default (docs/ARCHITECTURE.md § Agentic UI pattern,
- * rewritten). Collapsed: a slim one-line bar with the latest utterance (or
+ * rewritten). Collapsed: a slim floating pill with the latest utterance (or
  * the live partial while listening, or a degradation notice). Expanded: the
  * full history, capped so it never buries an open portfolio section — and
  * on mobile it's re-collapsed whenever a section opens (AgentOverlay).
  *
- * The plain text input lives here too, behind a small "Type" toggle. It is
- * intentionally unstyled relative to the voice UI — whether typing belongs
- * inside voice mode or is an exit from it is a post-device-test decision.
+ * Visually it's one cohesive component with the rest of the system: a
+ * rounded, fully-enclosed card on a calm neutral ground, an amber status
+ * dot while voice is live, amber-on-hover chip controls. The plain text
+ * input sits under a "Type" chip — reachable, deliberately quiet, not
+ * dressed up as a voice affordance.
  */
+const chip =
+  "shrink-0 rounded-full border px-2.5 py-1 text-small transition-colors " +
+  "border-neutral-700/70 text-neutral-400 hover:border-accent/50 hover:text-accent";
+const chipOn = "shrink-0 rounded-full border px-2.5 py-1 text-small border-accent/50 text-accent";
+const card =
+  "rounded-2xl border border-neutral-800/80 bg-neutral-900/85 shadow-lg shadow-black/40 backdrop-blur-md";
+
 export function TranscriptBar({
   messages,
   status,
@@ -70,35 +79,35 @@ export function TranscriptBar({
           : "";
 
   return (
-    <div className="pointer-events-auto w-full">
+    <div className="pointer-events-auto mx-auto w-full max-w-2xl px-3">
       {/* A persistent notice sits above the bar so it never masks the
           transcript line, and never gets lost when the bar collapses. */}
       {notice && !expanded && (messages.length > 0 || listening) ? (
-        <p className="mx-auto max-w-3xl px-4 pb-1 text-right text-small text-neutral-500">
+        <p className="mb-1.5 px-1 text-right text-small text-neutral-500">
           {notice}
         </p>
       ) : null}
 
       {expanded ? (
-        <div className="mx-auto max-w-3xl overflow-hidden rounded-t-xl border border-b-0 border-neutral-800 bg-neutral-950/95 backdrop-blur">
-          <div className="flex items-center justify-between border-b border-neutral-900 px-4 py-2">
-            <span className="text-small font-medium uppercase tracking-wider text-neutral-500">
+        <div className={`overflow-hidden ${card}`}>
+          <div className="flex items-center justify-between border-b border-neutral-800/70 px-4 py-2.5">
+            <span className="text-small font-medium uppercase tracking-[0.14em] text-accent/70">
               Conversation
             </span>
             <button
               type="button"
               onClick={onToggleExpanded}
-              className="text-small text-neutral-400 hover:text-neutral-100"
+              className={chip}
               aria-expanded="true"
             >
-              Collapse ▾
+              Collapse
             </button>
           </div>
-          <div className="max-h-[40vh] overflow-y-auto px-4 py-3">
+          <div className="max-h-[38vh] overflow-y-auto px-4 py-3">
             {notice ? (
               <p
                 role="status"
-                className="mb-3 rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-small text-neutral-400"
+                className="mb-3 rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2 text-small text-neutral-400"
               >
                 {notice}
               </p>
@@ -117,40 +126,50 @@ export function TranscriptBar({
           </div>
         </div>
       ) : (
-        <div className="mx-auto flex max-w-3xl items-center gap-3 rounded-t-xl border border-b-0 border-neutral-800 bg-neutral-950/90 px-4 py-2 backdrop-blur">
+        <div className={`flex items-center gap-2.5 px-3.5 py-2.5 ${card}`}>
+          {voiceMode ? (
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full bg-accent ${
+                listening ? "animate-pulse" : ""
+              }`}
+              aria-hidden="true"
+            />
+          ) : null}
           <p
             className={`min-w-0 flex-1 truncate text-small ${
-              notice ? "text-neutral-400" : "text-neutral-300"
+              notice ? "text-neutral-400" : "text-neutral-200"
             }`}
             aria-live="polite"
           >
             {collapsedLine || (
-              <span className="text-neutral-600">Transcript</span>
+              <span className="text-neutral-600">
+                {textOpen ? "Type your question below" : "Transcript"}
+              </span>
             )}
           </p>
           {showExpandControl && messages.length > 0 ? (
             <button
               type="button"
               onClick={onToggleExpanded}
-              className="shrink-0 text-small text-neutral-500 hover:text-neutral-200"
+              className={chip}
               aria-expanded="false"
             >
-              History ▴
+              History
             </button>
           ) : null}
           <button
             type="button"
             onClick={onToggleText}
             aria-pressed={textOpen}
-            className="shrink-0 text-small text-neutral-500 hover:text-neutral-200"
+            className={textOpen ? chipOn : chip}
           >
-            {textOpen ? "Hide typing" : "Type"}
+            {textOpen ? "Hide" : "Type"}
           </button>
         </div>
       )}
 
       {textOpen ? (
-        <div className="mx-auto max-w-3xl border-x border-neutral-800 bg-neutral-950/95 px-4 pb-3 backdrop-blur">
+        <div className={`mt-2 px-3.5 py-3 ${card}`}>
           <Composer
             canSend={canSend}
             busy={busy}
