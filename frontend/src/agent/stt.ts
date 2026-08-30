@@ -128,6 +128,8 @@ export type VoiceSessionState = "monitoring" | "capturing";
 
 export interface VoiceSession {
   state(): VoiceSessionState;
+  /** Current mic loudness, 0..1 (smoothed). For the visualization only. */
+  micLevel(): number;
   /** The agent's turn is starting — keep monitoring (for barge-in) but
    *  don't treat ambient noise as a new question. */
   hold(): void;
@@ -232,6 +234,16 @@ export async function createVoiceSession(
   sourceNode.connect(workletNode);
   workletNode.connect(sink);
   sink.connect(audioCtx.destination);
+
+  // A second, read-only tap off the mic for the agent visualization
+  // (AgentVisualization.tsx polls `micLevel()` on its own rAF clock). No
+  // extra mic stream — same `sourceNode`. The analyser runs on the audio
+  // thread; the level read is a cheap typed-array copy.
+  const micAnalyser = audioCtx.createAnalyser();
+  micAnalyser.fftSize = 512;
+  micAnalyser.smoothingTimeConstant = 0.5;
+  sourceNode.connect(micAnalyser);
+  const micLevelBuf = new Float32Array(micAnalyser.fftSize);
 
   console.info(
     `[stt] voice session live — AudioContext ${audioCtx.sampleRate} Hz`,
@@ -408,6 +420,15 @@ export async function createVoiceSession(
 
   return {
     state: () => state,
+    micLevel() {
+      micAnalyser.getFloatTimeDomainData(micLevelBuf);
+      let sum = 0;
+      for (let i = 0; i < micLevelBuf.length; i++) {
+        sum += micLevelBuf[i] * micLevelBuf[i];
+      }
+      // RMS of conversational speech ≈ 0.05–0.15 → map to a lively 0.4–1.
+      return Math.min(1, Math.sqrt(sum / micLevelBuf.length) * 9);
+    },
     hold() {
       holding = true;
       cb.onStateChange?.(state, "hold — agent turn");
@@ -439,6 +460,7 @@ export async function createVoiceSession(
         workletNode.disconnect();
         sourceNode.disconnect();
         sink.disconnect();
+        micAnalyser.disconnect();
       } catch {
         /* ignore */
       }

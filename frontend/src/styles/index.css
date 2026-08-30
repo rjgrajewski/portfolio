@@ -39,64 +39,60 @@
 
 @layer components {
   /*
-   * Desktop two-zone layout (docs/ARCHITECTURE.md § Product shape / §
-   * Frontend). A plain CSS Grid switch, not a second DOM tree: below
-   * 1024px this is inert (normal block flow, page scrolls as one column,
-   * unchanged from Phase 1). At 1024px+ it becomes a 3-row grid — header,
-   * a compact intro strip, then a fixed-height row holding the two
-   * independently-scrolling zones — and the whole page stops scrolling as
-   * a unit.
+   * Single-column portfolio (docs/ARCHITECTURE.md § Product shape,
+   * rewritten). The whole screen is the portfolio; the agent is present
+   * through the fixed visualization + this frame, not by occupying a
+   * column. The old desktop two-zone chat grid is gone.
    *
-   * grid-area placement is deliberately decoupled from DOM order: the
-   * agent zone markup comes BEFORE the content zone in the tree (so the
-   * mobile stacking order — intro, agent teaser, portfolio sections —
-   * matches Phase 1 exactly), while on desktop grid-template-areas puts
-   * content on the left and the agent zone on the right. Source order for
-   * keyboard/screen-reader users stays the sensible one on both
-   * breakpoints; only the desktop *visual* position is reassigned.
-   *
-   * 1024px matches Tailwind's `lg:` breakpoint used everywhere else in
-   * these components (e.g. the mobile-only "Browse manually" button) —
-   * one breakpoint value, so nothing can flip out of sync at the edge.
+   * Leave room at the bottom for the fixed agent dock so the footer is
+   * never permanently hidden behind it.
    */
-  .app-layout {
-    display: block;
+  .app-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* room for the fixed agent dock (viz + collapsed transcript bar) so the
+       footer is never permanently hidden behind it */
+    padding-bottom: 9.5rem;
   }
 
-  @media (min-width: 1024px) {
-    .app-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 380px;
-      grid-template-rows: auto auto minmax(0, 1fr);
-      grid-template-areas:
-        "header header"
-        "intro  intro"
-        "content agent";
-      height: 100vh;
-      height: 100dvh;
-      overflow: hidden;
-    }
+  /*
+   * AI-mode frame — a subtle inset border around the whole viewport while
+   * the agent is active. Communicates "the agent is driving the interface"
+   * (which is why sections open on their own). Pointer-transparent, above
+   * content but below the mobile section takeover (z-40). Breathes very
+   * slightly; static under reduced motion.
+   */
+  .ai-frame {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    box-shadow:
+      inset 0 0 0 1px rgba(232, 163, 61, 0.28),
+      inset 0 0 44px rgba(232, 163, 61, 0.05);
+    animation: ai-frame-breathe 6s ease-in-out infinite;
+  }
+  .ai-frame[data-viz="listening"],
+  .ai-frame[data-viz="speaking"] {
+    box-shadow:
+      inset 0 0 0 1px rgba(242, 182, 88, 0.42),
+      inset 0 0 60px rgba(232, 163, 61, 0.08);
+  }
 
-    .app-layout > .layout-header {
-      grid-area: header;
+  @keyframes ai-frame-breathe {
+    0%,
+    100% {
+      opacity: 0.75;
     }
-
-    .app-layout > .layout-intro {
-      grid-area: intro;
+    50% {
+      opacity: 1;
     }
+  }
 
-    .app-layout > .layout-agent {
-      grid-area: agent;
-      min-height: 0;
-      overflow-y: auto;
-      overscroll-behavior-y: contain;
-    }
-
-    .app-layout > .layout-content {
-      grid-area: content;
-      min-height: 0;
-      overflow-y: auto;
-      overscroll-behavior-y: contain;
+  @media (prefers-reduced-motion: reduce) {
+    .ai-frame {
+      animation: none;
+      opacity: 1;
     }
   }
 }

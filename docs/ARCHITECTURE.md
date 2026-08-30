@@ -54,7 +54,7 @@ Non-negotiables that shape everything below:
 
 - **Single page.** Sections expand/reveal in place. **No new browser tabs, no route changes** — that risks breaking chat state.
 - **The agent and the manual experience are the same experience.** The agent emits a structured UI action alongside its answer; the frontend executes it against the same components a click would drive.
-- **Desktop (≥1024px) is a two-zone layout, not a single scrolling column** — a fixed agent zone alongside an independently-scrolling portfolio-content zone, both visible at once, page-level scroll disabled. This is a structural prerequisite for "reveal and spoken answer land simultaneously" below, not a cosmetic choice: a visitor can't see both at once in a single stacked column, since revealing a section would either push the agent's answer off-screen or vice versa. Mobile stays a single scrolling column (unchanged). See `docs/DECISIONS.md` for the zone sides/proportions and why.
+- **Voice is the primary entry; the whole screen is the portfolio.** The layout is a single scrolling column (mobile and desktop alike). The agent is present as a fixed, organic **visualization** at the bottom of the viewport — breathing at rest, reacting to mic/playback amplitude in conversation — and, while a conversation is live, a subtle **AI-mode frame** around the viewport that signals "the agent is driving the interface". It does **not** occupy a docked chat column. The **transcript is hidden by default** — a slim bottom bar with the last line, expandable to full history, capped so it never buries an open section (and re-collapsed on mobile whenever a section opens). A discreet **"Leave voice"** control is always available; on exit the frame clears and the portfolio is untouched. This replaces the earlier desktop two-zone layout (a fixed agent column beside a scrolling content column) — recorded in `docs/DECISIONS.md`. Text input stays reachable behind a small "Type" toggle in the bar, deliberately *not* styled into the voice aesthetic pending a device-test decision on whether typing belongs inside voice mode or is an exit from it.
 - **The manual click-through is a complete, real alternative** for recruiters who won't use AI — not a dead-end PDF.
 - **Visual quality is a hard requirement — for launch, not for Tuesday.** Design-forward, clean, minimalist, not templated or obviously generated. This bar is formally owned by [ROADMAP Phase 9](ROADMAP.md#phase-9--polish--responsiveaccessibility-pass); the [Tuesday minimum bar](ROADMAP.md#tuesday-demo--minimum-bar) only requires a timeboxed design pass (Phase 1) that is presentable, not the fully polished result. This resolves an earlier inconsistency where Phase 1's exit criteria implied the full bar had to clear before Tuesday.
 - **The portfolio is itself a proof of skill.** Agentic design choices should be defensible in an interview.
@@ -286,8 +286,9 @@ The agent does not just return text/audio. It returns a **structured UI action a
 - The primary action is `reveal_section(sectionId)`. The section IDs are a fixed, known set (`education`, `amazon`, `flowjob`, `rhymind`, `portfolio-itself`, …), shared between the manual portfolio and the agent.
 - **Single-page only.** Sections expand/reveal in place. **No new tabs. No route changes.** State (conversation, audio, language) must survive every interaction.
 - The section reveal and the spoken answer happen **simultaneously**, not sequentially. Practically: as soon as the streamed model output yields the action (early, ideally before the prose finishes), the frontend triggers the reveal while audio playback of the answer begins.
-- On mobile, "reveal in place" may need to become a **full-screen takeover** for the active section rather than a side panel / split view (see [Graceful degradation](#graceful-degradation) and [ROADMAP Phase 3](ROADMAP.md#phase-3--agentic-ui-integration)).
-- The manual click-through calls the **same** reveal logic. There is one code path for "show section X", whether the trigger is a click or the agent.
+- On mobile, "reveal in place" becomes a **full-screen takeover** for the active section (`MobileSectionOverlay`, z-40 — above the agent dock); on desktop it's the in-place accordion. Both are driven by the same `activeSectionStore` state.
+- The manual click-through calls the **same** reveal logic. There is one code path for "show section X", whether the trigger is a click or the agent — `revealSection` in `content/activeSectionStore.ts`, no exceptions. The agent's on-screen presence (the visualization, the AI-mode frame, the transcript dock — see [§ Product shape](#product-shape)) is layered *over* the portfolio and only ever **reads** `activeSectionStore`; it never forks the reveal path.
+- **The agent's presence is ambient, not a panel.** A fixed canvas visualization (organic amber form, `requestAnimationFrame`, no animation library) shows four states without text — rest (breathing), listening (swells with real mic amplitude, tapped off the voice session's existing mic node), thinking (a lobe orbits the perimeter — distinct rotational motion), speaking (shimmer pulsing with an analyser on the Polly output path). `prefers-reduced-motion` switches to statically-distinguishable shapes. Audio processing (the AudioWorklet + SDK) always has thread priority over the animation.
 
 ---
 
@@ -547,12 +548,12 @@ portfolio/
 │   │   │   ├── portfolio/              # manual click-through
 │   │   │   │   ├── SectionShell.tsx
 │   │   │   │   └── sections/           # Education, Amazon, FlowJob, Rhymind, PortfolioItself, ...
-│   │   │   ├── agent/                  # chat + voice UI
-│   │   │   │   ├── AgentPanel.tsx
-│   │   │   │   ├── Transcript.tsx
-│   │   │   │   ├── VoiceButton.tsx
-│   │   │   │   ├── TextInput.tsx
-│   │   │   │   └── LanguageToggle.tsx
+│   │   │   ├── agent/                  # the agent's on-screen presence (not a panel)
+│   │   │   │   ├── AgentOverlay.tsx     # fixed dock: viz + transcript bar + AI-mode frame
+│   │   │   │   ├── AgentVisualization.tsx  # canvas blob, 4 states, rAF, no anim lib
+│   │   │   │   ├── TranscriptBar.tsx    # hidden-by-default transcript, expandable
+│   │   │   │   ├── Transcript.tsx       # the message list (used inside TranscriptBar)
+│   │   │   │   └── Composer.tsx         # plain text fallback, behind a "Type" toggle
 │   │   │   └── ui/                     # design-system primitives (button, card, motion wrappers)
 │   │   ├── agent/                      # client-side agent orchestration
 │   │   │   ├── useConversation.ts      # turn state, history, session-cap handling

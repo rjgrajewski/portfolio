@@ -62,7 +62,7 @@ const MANUAL_FALLBACK =
 
 const ERROR_NOTICE: Record<ErrorCode, string> = {
   session_cap:
-    "This session has reached its message limit. Reload the page for a fresh one.",
+    "That's a good run of questions for one visit. Reload the page whenever you want to keep going.",
   throttled: "That came through fast. Give it a few seconds, then try again.",
   breaker_tripped:
     "The assistant has hit today's usage limit and is paused until tomorrow.",

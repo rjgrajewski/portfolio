@@ -1,22 +1,25 @@
 import { Header } from "./components/layout/Header";
 import { Intro } from "./components/layout/Intro";
-import { AgentZone } from "./components/layout/AgentZone";
-import { ContentZone } from "./components/layout/ContentZone";
+import { PortfolioSections } from "./components/portfolio/PortfolioSections";
+import { Footer } from "./components/layout/Footer";
+import { AgentOverlay } from "./components/agent/AgentOverlay";
 
-// Two-zone desktop layout (docs/ARCHITECTURE.md § Product shape / §
-// Frontend), mobile unchanged from Phase 1. The `.app-layout` grid in
-// styles/index.css does the actual layout switch at 1024px — this file
-// only decides DOM order, which is deliberately the mobile stacking
-// order (Header, Intro, AgentZone, ContentZone). At `lg:`,
-// grid-template-areas repositions AgentZone to the right and ContentZone
-// to the left without touching this order — see DECISIONS.md for why.
+/**
+ * Single-column portfolio (docs/ARCHITECTURE.md § Product shape, rewritten).
+ * The whole screen belongs to the portfolio; the agent is present through
+ * `AgentOverlay` — a fixed visualization + a hidden transcript + the AI-mode
+ * frame — not through a docked chat column. Section reveal is unchanged: it
+ * runs through `revealSection` / `activeSectionStore`, one code path,
+ * desktop accordion or mobile takeover.
+ */
 export default function App() {
   return (
-    <div className="app-layout min-h-screen lg:min-h-0">
+    <div className="app-shell">
       <Header />
       <Intro />
-      <AgentZone />
-      <ContentZone />
+      <PortfolioSections />
+      <Footer />
+      <AgentOverlay />
     </div>
   );
 }

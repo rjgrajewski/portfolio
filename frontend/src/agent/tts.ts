@@ -57,6 +57,8 @@ export interface SpeechPlayer {
   stop(): void;
   /** True while audio is scheduled or playing. */
   isSpeaking(): boolean;
+  /** Current playback loudness, 0..1 (smoothed). For the visualization. */
+  playbackLevel(): number;
 }
 
 const VOICE_ID = "Ruth";
@@ -93,6 +95,9 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
   let nextStartAt = 0;
   let announcedStart = false;
 
+  let analyser: AnalyserNode | null = null;
+  let levelBuf: Float32Array<ArrayBuffer> | null = null;
+
   function getCtx(): AudioContext {
     if (!ctx) {
       const Ctor =
@@ -102,6 +107,20 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
       ctx = new Ctor();
     }
     return ctx;
+  }
+
+  /** Shared analyser on the output path — every scheduled source routes
+   *  through it so the visualization can pulse in time with the voice. */
+  function getOutNode(): AudioNode {
+    const audioCtx = getCtx();
+    if (!analyser) {
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.55;
+      analyser.connect(audioCtx.destination);
+      levelBuf = new Float32Array(analyser.fftSize);
+    }
+    return analyser;
   }
 
   async function client(): Promise<PollyClient> {
@@ -215,7 +234,7 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
     const audioCtx = getCtx();
     const src = audioCtx.createBufferSource();
     src.buffer = buf;
-    src.connect(audioCtx.destination);
+    src.connect(getOutNode());
 
     const startAt = Math.max(audioCtx.currentTime + 0.02, nextStartAt);
     src.start(startAt);
@@ -320,6 +339,13 @@ export function createSpeechPlayer(opts: SpeechPlayerOptions = {}): SpeechPlayer
         synthQueue.length > 0 ||
         synthRunning
       );
+    },
+    playbackLevel() {
+      if (!analyser || !levelBuf) return 0;
+      analyser.getFloatTimeDomainData(levelBuf);
+      let sum = 0;
+      for (let i = 0; i < levelBuf.length; i++) sum += levelBuf[i] * levelBuf[i];
+      return Math.min(1, Math.sqrt(sum / levelBuf.length) * 6);
     },
   };
 }

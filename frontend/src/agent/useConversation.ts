@@ -64,6 +64,10 @@ export interface UseConversation {
   listening: boolean;
   partialTranscript: string;
   speaking: boolean;
+  /** Live mic loudness 0..1 while a voice session exists, else 0. Viz only. */
+  micLevel: () => number;
+  /** Live playback loudness 0..1 while the agent speaks, else 0. Viz only. */
+  playbackLevel: () => number;
   /** Text turn — reply is not spoken. */
   send: (text: string) => void;
   /** Turn voice mode on/off. */
@@ -135,6 +139,12 @@ export function useConversation(): UseConversation {
   const unlockAudio = useCallback(() => {
     void getPlayer().unlock();
   }, [getPlayer]);
+
+  const micLevel = useCallback(() => sessionRef.current?.micLevel() ?? 0, []);
+  const playbackLevel = useCallback(
+    () => playerRef.current?.playbackLevel() ?? 0,
+    [],
+  );
 
   const appendToAgentMessage = useCallback((id: string, delta: string) => {
     setMessages((prev) =>
@@ -403,6 +413,8 @@ export function useConversation(): UseConversation {
     listening,
     partialTranscript,
     speaking,
+    micLevel,
+    playbackLevel,
     send,
     toggleVoice,
     unlockAudio,

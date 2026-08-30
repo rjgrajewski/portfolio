@@ -59,10 +59,14 @@ export interface EnvConfig {
   /**
    * Per-session message cap (docs/ARCHITECTURE.md § Abuse protection) —
    * hard cap on exchanges per client-generated `sessionId`. NOT an abuse
-   * control (the id is trivially rotated); this only bounds *accidental*
-   * overuse, e.g. a browser tab stuck in a retry loop. Kept per-env for the
-   * same reason as the breaker threshold: dev can be tight, prod is looser
-   * so a genuine back-and-forth in an interview never hits it.
+   * control (the id is client-side and now regenerates on every page load —
+   * see frontend/src/agent/sessionId.ts). Its only job is to stop ONE stuck
+   * page view (a runaway retry loop) from hammering the endpoint; the
+   * in-function token bucket and the daily circuit-breaker are the real
+   * cost bounds. So it is set generously — well above any real
+   * back-and-forth (a genuinely engaged recruiter can go deep for a long
+   * time) — since a tight value buys no security and only risks cutting off
+   * the right person mid-conversation.
    */
   readonly sessionMessageCap: number;
 
@@ -84,7 +88,7 @@ const dev: EnvConfig = {
   bedrockModelId: "eu.anthropic.claude-haiku-4-5-20251001-v1:0",
   dailyCircuitBreakerThreshold: 200,
   mediaBreakerThreshold: 50,
-  sessionMessageCap: 20,
+  sessionMessageCap: 60,
   allowedOrigins: [
     "http://localhost:5173",
     "https://dev.daz9bpic9q3nd.amplifyapp.com",
@@ -100,7 +104,11 @@ const prod: EnvConfig = {
   // ~30-60x a single interview's grant count; still caps a scripted abuser
   // to `mediaBreakerThreshold` fresh 15-min credential windows per UTC day.
   mediaBreakerThreshold: 120,
-  sessionMessageCap: 40,
+  // Deep-dive-friendly: a genuinely engaged recruiter asking follow-ups
+  // (business layer, then technical, per project, across four projects +
+  // STAR stories) can easily pass 40. The daily breaker (500) is the real
+  // bound; this only stops a stuck tab. Reload starts fresh.
+  sessionMessageCap: 150,
   allowedOrigins: ["https://main.daz9bpic9q3nd.amplifyapp.com"],
 };
 
