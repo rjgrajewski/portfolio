@@ -8,17 +8,18 @@
    * reads a name from here — no scattered magic numbers.
    *
    *   content            0 (auto)   portfolio sections, footer
-   *   --z-header         20         sticky header
-   *   --z-section-takeover 40       mobile full-screen section reveal
-   *   --z-ai-frame       50         AI-mode frame — ABOVE the takeover, so
+   *   --z-section-takeover 40       section modal (over the hero, under the
+   *                                 sticky header so CV stays reachable)
+   *   --z-header         45         sticky header — above the modal
+   *   --z-ai-frame       50         AI-mode frame — ABOVE the modal, so
    *                                 the agent is visibly present while a
    *                                 section it opened is on screen
    *   --z-agent-dock     60         the visualization + transcript bar —
    *                                 always the top layer during a conversation
    */
   :root {
-    --z-header: 20;
     --z-section-takeover: 40;
+    --z-header: 45;
     --z-ai-frame: 50;
     --z-agent-dock: 60;
   }
@@ -84,7 +85,7 @@
    * it is deliberately strong — calm but not missable at arm's length on a
    * phone.
    *
-   * Rendered ABOVE the mobile section takeover so the agent stays present
+   * Rendered ABOVE the section modal so the agent stays present
    * over a section it opened. `translateZ(0)` keeps it a stable iOS
    * compositing layer. Its opacity is driven per-frame by AgentOverlay
    * (slow breathe + a lift with mic/playback amplitude) so it reads as one
@@ -119,6 +120,34 @@
       rgba(242, 182, 88, 0.6) 100%
     );
     box-shadow: inset 0 0 54px 0 rgba(242, 182, 88, 0.52);
+  }
+
+  /*
+   * Section modal — rises over the hero. Enter/exit are the same
+   * transition reversed (data-entered). Reduced-motion snaps via the
+   * global rule above.
+   */
+  .section-modal-backdrop {
+    transition: opacity 280ms ease-out;
+  }
+  .section-modal-backdrop[data-entered="false"] {
+    opacity: 0;
+  }
+  .section-modal-backdrop[data-entered="true"] {
+    opacity: 1;
+  }
+  .section-modal-panel {
+    transition:
+      opacity 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .section-modal-panel[data-entered="false"] {
+    opacity: 0;
+    transform: translateY(14%) scale(0.98);
+  }
+  .section-modal-panel[data-entered="true"] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 
 }

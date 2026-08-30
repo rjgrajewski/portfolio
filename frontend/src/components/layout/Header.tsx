@@ -1,9 +1,11 @@
 import { LinkButton } from "../ui/LinkButton";
 
 /**
- * Sticky so the CV download stays reachable at any scroll position. Full-
- * width bar rather than the reading-width `Container` used elsewhere — it
- * spans the viewport edge to edge above the single-column portfolio.
+ * Sticky so the CV download stays reachable at any scroll position,
+ * including over an open section modal (`--z-header` sits above
+ * `--z-section-takeover`). Full-width bar rather than the reading-width
+ * `Container` used elsewhere — it spans the viewport edge to edge
+ * above the single-column portfolio.
  */
 export function Header() {
   return (

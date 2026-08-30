@@ -1,8 +1,7 @@
 /**
- * Section id → content component. One map, imported by both the desktop
- * in-place list (PortfolioSections) and the mobile full-screen takeover
- * (MobileSectionOverlay), so the two presentations can never render
- * different content for the same section.
+ * Section id → content component. One map, used by the section modal
+ * (`SectionModal`), so a list tap and the agent cannot render different
+ * content for the same section.
  */
 import type { ComponentType } from "react";
 import type { SectionId } from "../../content/sections";

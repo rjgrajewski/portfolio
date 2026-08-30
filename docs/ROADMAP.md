@@ -197,7 +197,7 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 > This is where the full "visual quality is a hard requirement" bar from [ARCHITECTURE.md § Product shape](ARCHITECTURE.md#product-shape) formally applies. The Phase 1 design pass only had to be presentable and timeboxed; **this phase is where "not templated / design-forward" must actually be true.**
 
-- [ ] Real landing copy (blurb) — replaces placeholder *(copy itself is deferred, not an architecture concern)*
+- [x] Real landing copy (blurb) — replaces placeholder *(copy itself is deferred, not an architecture concern)*
 - [ ] Conversation opener: the agent introduces itself and its role at conversation start; a few example starter questions *(exact script deferred)*
 - [ ] Visual polish pass that clears the "not templated / design-forward" bar in full — spacing, motion timing, imagery
 - [ ] Mobile pass: voice flow, keyboard behaviour, full-screen section takeover, tap targets

@@ -16,10 +16,10 @@ import { TranscriptBar } from "./TranscriptBar";
  * plus the AI-mode frame while active. The rest of the screen is the
  * portfolio.
  *
- * Section reveal is untouched: it still runs through `revealSection` /
- * `activeSectionStore` and the desktop accordion / mobile takeover — this
- * component only READS `useActiveSection` to keep the expanded transcript
- * out of the way of an open section.
+ * Section reveal is unchanged: it still runs through `revealSection` /
+ * `activeSectionStore` and `SectionModal` — this component only READS
+ * `useActiveSection` to keep the expanded transcript out of the way of
+ * an open section.
  */
 export function AgentOverlay() {
   const conv = useConversation();
@@ -151,8 +151,8 @@ export function AgentOverlay() {
       textOpen ||
       !!degradation.notice ||
       !!degradation.voice.notice);
-  // On mobile a full-screen section takeover owns the screen — don't let the
-  // dock's expanded panel compete.
+  // On mobile, don't let the dock's expanded panel compete with an open
+  // section modal.
   const allowExpand = isDesktop || !activeSection;
 
   // Rendered into <body>, not into the app tree — so the fixed positioning

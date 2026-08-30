@@ -8,9 +8,9 @@ import { AgentOverlay } from "./components/agent/AgentOverlay";
  * Single-column portfolio (docs/ARCHITECTURE.md § Product shape, rewritten).
  * The whole screen belongs to the portfolio; the agent is present through
  * `AgentOverlay` — a fixed visualization + a hidden transcript + the AI-mode
- * frame — not through a docked chat column. Section reveal is unchanged: it
- * runs through `revealSection` / `activeSectionStore`, one code path,
- * desktop accordion or mobile takeover.
+ * frame — not through a docked chat column. Section reveal runs through
+ * `revealSection` / `activeSectionStore`, one code path: a modal over
+ * the hero on every breakpoint.
  */
 export default function App() {
   return (

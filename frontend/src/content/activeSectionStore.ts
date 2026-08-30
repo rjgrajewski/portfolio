@@ -48,10 +48,9 @@ export function closeActiveSection(): void {
 
 /**
  * Click affordance built on top of `revealSection`/`closeActiveSection`:
- * clicking an already-open section collapses it (standard accordion UX),
- * clicking a different one opens it. The agent doesn't use this — it always
- * wants the section open, never toggled shut — so it calls `revealSection`
- * directly instead.
+ * clicking an already-open section collapses it, clicking a different
+ * one opens it. The agent doesn't use this — it always wants the section
+ * open, never toggled shut — so it calls `revealSection` directly instead.
  */
 export function toggleSection(sectionId: SectionId): void {
   if (activeSectionId === sectionId) {

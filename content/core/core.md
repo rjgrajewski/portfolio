@@ -11,11 +11,10 @@
 
 ## Summary
 
-Rafal Grajewski builds AI-native products end to end — the model-facing agent
-logic, the AWS infrastructure under it, and the data layer behind it. He came
-to this from operations: seven years at Amazon took him from front-line and
-workforce-staffing roles into a Business Analyst role that owns the analytics
-layer — complex SQL and reporting models on Amazon Redshift — behind mass
+Rafal Grajewski turns HR and workforce problems into AI-enabled workflows.
+Seven years at Amazon took him from front-line HR support and workforce
+staffing into a Business Analyst role that owns the analytics layer —
+complex SQL and reporting models on Amazon Redshift — behind mass
 recruitment across Europe. A computer science degree (2024) is the formal half
 of that shift.
 

@@ -1,8 +1,8 @@
 # This portfolio — technical layer
 
-All AWS-native — no third-party AI vendor or API key. Today the agent is
-text-only; voice input and output (Amazon Transcribe and Polly, browser-direct)
-are a designed-but-later phase.
+All AWS-native — no third-party AI vendor or API key. Voice input and output
+run browser-direct against Amazon Transcribe and Polly; the agent also answers
+in text.
 
 ## Reasoning
 

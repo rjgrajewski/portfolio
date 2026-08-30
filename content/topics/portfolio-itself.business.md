@@ -3,7 +3,8 @@
 This site is itself a work sample. It is a portfolio a recruiter can use three
 ways: download a CV, click through the sections manually, or ask the agent —
 the one answering now — which talks about Rafal in the third person and opens
-the relevant section as it replies.
+the relevant section as it replies. Questions can be typed or spoken; Amazon
+Transcribe and Polly handle voice in the browser.
 
 Why build it this way:
 

@@ -3,11 +3,9 @@ import { useSyncExternalStore } from "react";
 /**
  * `true` at >= 1024px — the same breakpoint as Tailwind's `lg:`.
  *
- * The mobile section reveal is a full-screen takeover (a separately-rendered
- * overlay), the desktop one is an in-place accordion — different component
- * trees, chosen from the same `activeSectionStore` state, not a second
- * source of truth. The agent dock also uses it to decide whether an
- * expanded transcript may cover the screen.
+ * The agent dock uses this to decide whether an expanded transcript
+ * may cover the screen. (Section reveal is a modal on every breakpoint
+ * now — this hook no longer forks that presentation.)
  */
 const QUERY = "(min-width: 1024px)";
 
