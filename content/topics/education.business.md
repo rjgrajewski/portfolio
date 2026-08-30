@@ -1,13 +1,18 @@
 # Education — business layer
 
-Rafal holds a **computer science degree** from Uniwersytet WSB Merito in
-Wroclaw, completed in **2024**.
+Rafal holds a **Bachelor's degree in Computer Science**, with a **Graphic
+Design specialization**, from Uniwersytet WSB Merito in Wroclaw, completed in
+**2024**.
 
-The interesting part is the timing. He started his career in sales and account
-management (2014–2018), moved into operations and workforce staffing at Amazon,
-and studied computer science alongside that work — finishing the degree while
-employed as a staffing manager. It was a deliberate move from operations toward
-engineering, not a first qualification.
+The path there wasn't a straight line into engineering. His original intent was
+to study graphic design specifically — the specialization is why he picked
+this degree. But a computer science degree also means a lot of coding
+alongside the design coursework, and he was working at Amazon in operations at
+the same time. Studying and working in parallel is what surfaced the overlap:
+he kept noticing chances to merge what he was learning about programming with
+his professional experience in HR and large-corporate operations. The shift
+toward engineering grew out of that overlap, not a single decision to switch
+fields.
 
 For a hiring conversation:
 

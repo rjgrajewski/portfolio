@@ -162,14 +162,14 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 > The agent is only as good as its source material. This comes *after* the MVP build so the pipeline can be tested end to end early — but it is still **on the critical path for Tuesday** and must not be discovered late. A genuinely solid first pass across business + technical layers for four flagship topics plus STAR case studies is realistically **closer to a full day** than "a couple of hours". For Tuesday, minimal real content for the flagship topics (as already scoped in the [minimum bar](#tuesday-demo--minimum-bar)) is sufficient — full authoring for every layer can continue after the demo.
 >
-> **Status:** the flagship-topic first pass (business + technical, plus `portfolio-itself`) is **done and synced to dev + prod**. What's left is STAR case studies, the personal layer, the `content/README.md` authoring guide, and folding in the answers to the open questions below.
+> **Status:** flagship topics (business + technical, plus `portfolio-itself` and `core.md`) now have a **second pass from a Claude.ai voice interview** (`2026-08-31`) — first-hand detail, not just CV/repo reconstruction. Synced to the `dev/` S3 prefix that day (prod still on the previous pass until an explicit prod sync). What's left is STAR case studies, the personal layer, the `content/README.md` authoring guide, and the remaining open questions below.
 
-- [ ] CV — the authoritative summary (feeds `core.md` and the PDF) *(CV PDF was swapped for the real one in `4c38ea1`; `core.md` summary rewritten from it)*
-- [x] Per-topic write-ups, **business layer**: problem solved, why it mattered — Amazon, FlowJob, education *(first real pass — from the code-based flowjob.it repo analysis + the CV; `core.md` + `manifest.json` updated, seed markers removed. Open questions below.)*
-- [x] Per-topic write-ups, **technical layer**: stack, decisions, trade-offs *(FlowJob rebuilt from the repo analysis — Argus/Minerva, Fargate-vs-Lambda, the two Bedrock models, SQL match score, HttpOnly+CSRF kept; source-doc artifacts stripped)*
-- [x] Portfolio-as-a-project write-up (`portfolio-itself.*.md`) — architecture as a topic the agent can discuss *(from ARCHITECTURE.md + DECISIONS.md)*
-- [x] `manifest.json` finalised — every topic, its layers, a one-line summary *(rhymind → portfolio-itself; summaries refreshed; seed note dropped)*
-- [x] Sync to dev, then prod *(`prod/` prefix synced `2026-08-30`; dev + prod Lambdas also carry the bundled copy)*
+- [ ] CV — the authoritative summary (feeds `core.md` and the PDF) *(CV PDF was swapped for the real one in `4c38ea1`; `core.md` summary rewritten from it, then again from the `2026-08-31` interview)*
+- [x] Per-topic write-ups, **business layer**: problem solved, why it mattered — Amazon, FlowJob, education *(second pass `2026-08-31` from a voice interview: Associate Partner/WFS termination & tenure tools, WFS Manager of three, BA document-compliance tool, Graphic Design specialization + non-linear path, flowjob.it started as a personal script, documentation-first on this portfolio)*
+- [x] Per-topic write-ups, **technical layer**: stack, decisions, trade-offs *(amazon.technical.md refreshed in the same interview pass — Excel→SQL tenure rebuild, EDM document-compliance tool; FlowJob technical still from the repo analysis)*
+- [x] Portfolio-as-a-project write-up (`portfolio-itself.*.md`) — architecture as a topic the agent can discuss *(business layer now includes the documentation-first origin; technical still from ARCHITECTURE.md + DECISIONS.md)*
+- [x] `manifest.json` finalised — every topic, its layers, a one-line summary *(one-liners refreshed `2026-08-31` to match the interview pass)*
+- [x] Sync to dev, then prod *(`prod/` prefix synced `2026-08-30`; `dev/` resynced `2026-08-31` after the interview pass and `portfolio-api-dev` redeployed so the bundled copy matches. Prod Lambda/S3 still on the previous corpus until an explicit prod sync.)*
 - [ ] STAR case studies for the flagship projects (business + technical layers)
 - [ ] Thin personal / interests layer (`personal.md`)
 - [ ] `content/README.md` authoring guide reflects the final tone/length/layering rules
@@ -180,10 +180,11 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 - [ ] FlowJob: the two Bedrock models — keep abstract ("a larger / a smaller Claude model") or name them (repo README says Claude 3.5 Sonnet / Claude 3 Haiku)? Which is current in code?
 - [ ] FlowJob: keep the cost figures (USD 3/15 and 1/5 per M tokens, ~USD 3/mo compute — public pricing + estimate, not measured) or drop to "cents a day / a few dollars a month"?
 - [ ] FlowJob: confirm "since October 2025" as the date to state; confirm the run figures (~few thousand listings, ~1h, ~hundreds of inserts, ~100 deletes) are OK to give.
-- [ ] Amazon: what did the **Associate Partner (2018–2021)** role actually involve? Currently only "the entry point, in operations".
+- [x] Amazon: what did the **Associate Partner (2018–2021)** role actually involve? — frontline HR (holiday, seniority, onboarding; main point of contact for terminations); first self-built tool was the termination-certificate tracker, adopted in every building in the country.
 - [ ] Amazon: is "hundreds of thousands of workers" the right public figure, and what does it measure (headcount supported / hired per year / total)?
 - [ ] Amazon: anything that must **not** be said publicly (programme names, internal tools, teams, exact metrics)? Any specific achievement to name? BI tool for the dashboards (QuickSight / Tableau / internal) or keep "dashboards" generic?
-- [ ] Education: degree level (inżynier / licencjat)? Confirm CS was studied part-time alongside the Amazon job. Any specialisation / thesis to add (`education.technical.md` currently flags this as a gap). Keep the "sales & account management 2014–2018" summary of the pre-Amazon years, or drop it?
+- [x] Education: Graphic Design specialization confirmed; CS studied alongside full-time Amazon operations — the overlap is what pulled him toward engineering, not a single switch.
+- [ ] Education: degree level (inżynier / licencjat)? Any thesis? (`education.technical.md` still flags coursework/thesis as a gap.) Keep or drop the 2014–2018 pre-Amazon years?
 - [ ] portfolio-itself: anything the agent should not volunteer unprompted (the $25 figure, circuit-breaker mechanics, "session ID trivially rotated")?
 - [ ] Corpus name convention: currently ASCII `Rafal` / `Wroclaw` (matches `core.md` + system prompt). Switch the whole corpus to `Rafał`?
 - [ ] `docs/ARCHITECTURE.md` still names Rhymind in non-historical, structural spots (repo-layout tree, the `reveal_section` section-ID list, § Agent persona "Scope"). Left untouched per instruction — clean up in a follow-up?

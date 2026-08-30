@@ -54,11 +54,13 @@ function contentType(file: string): string {
 
 async function* walk(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir)) {
+    // Skip macOS junk and other dotfiles; README.md is the authoring
+    // guide, not corpus the agent reads.
+    if (entry.startsWith(".") || entry === "README.md") continue;
     const full = path.join(dir, entry);
     if ((await stat(full)).isDirectory()) {
       yield* walk(full);
-    } else if (entry !== "README.md") {
-      // README.md is the authoring guide, not corpus the agent reads.
+    } else {
       yield full;
     }
   }
