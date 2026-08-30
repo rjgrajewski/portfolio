@@ -58,7 +58,7 @@ funding after launch once there is real traffic.
 
 The honest summary: the hardest problem already solved was making skill names
 from messy job ads consistent enough to match on; the hardest current fight is
-the UI. What Rafal says he would not do again is leave documentation until
-later — a lesson from working alone on a fast-moving AI-assisted build, and one
-he corrected deliberately on this portfolio (documentation came first, before
-any application code).
+the UI.
+
+Ask for the technical layer for the architecture — Argus, Minerva, the
+Bedrock pipeline, and the app around it.

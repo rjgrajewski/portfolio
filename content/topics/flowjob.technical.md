@@ -1,32 +1,31 @@
 # flowjob.it — technical layer
 
-flowjob.it has three parts: a scraper (**Argus**), an AI skill-normalization
-service (**Minerva**), and the web app. Argus and Minerva are internal service
-names, not products or frameworks.
+flowjob.it has three parts: a scraper, an AI skill-normalization
+service, and the web app.
 
-## Collection — Argus
+## Collection
 
 A Playwright scraper pulls IT listings from JustJoin.it once per run: new
 listings in, gone listings out. Run on a laptop it took hours and pinned the
 machine, so it moved to a container on **AWS Fargate**. The reason it is Fargate
 and not Lambda: a full run is around an hour, and Lambda's hard limit is 15
-minutes. **Step Functions** orchestrates the pipeline — Argus runs first, and
-Minerva only starts if the scrape succeeded. The scraper itself never calls the
-AI; the orchestrator does. A nightly schedule exists in the infrastructure but
-is left off until explicitly enabled.
+minutes. **Step Functions** orchestrates the pipeline — the scraper runs first,
+and skill normalization only starts if the scrape succeeded. The scraper itself
+never calls the AI; the orchestrator does. A nightly schedule exists in the
+infrastructure but is left off until explicitly enabled.
 
 A typical run is on the order of a few thousand listings, roughly an hour, a
 few hundred inserts and about a hundred stale deletes.
 
-## Skill normalization — Minerva
+## Skill normalization
 
 Raw tech stacks on job ads are inconsistent — `React.js`, `ReactJS`, and
-`React` are the same skill written three ways. Minerva runs on **Amazon
+`React` are the same skill written three ways. The normalizer runs on **Amazon
 Bedrock** to canonicalize skill names, merge synonyms, and link them back to
 listings. Listings expire; the skill dictionary persists, so each run only
 touches names it has not seen before.
 
-Decisions inside Minerva:
+Decisions inside the normalizer:
 
 - **Prompting beat embeddings.** An embeddings-based approach was built and then
   dropped — sorted-batch prompting was more precise for this task.

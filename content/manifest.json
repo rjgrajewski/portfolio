@@ -26,7 +26,7 @@
       "sectionId": "flowjob",
       "layers": {
         "business": "Started as a personal Python scraper, grown into an IT job-search product that uses the skill profile as the filter — live, unannounced, UI still the bottleneck.",
-        "technical": "Argus and Minerva, the Bedrock skill-normalization pipeline, and the app around it, with the decisions behind each."
+        "technical": "The Fargate scraper, the Bedrock skill-normalization pipeline, and the app around it, with the decisions behind each."
       }
     },
     {
