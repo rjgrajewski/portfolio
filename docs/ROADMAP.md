@@ -139,12 +139,13 @@ Nice to have by Tuesday, not required: voice I/O (Phase 4), full bilingual (Phas
 
 ## Phase 7 — Prompt injection & guardrail testing
 
-- [ ] `docs/prompt-injection-tests.md` — attack catalogue with expected behaviour:
+- [ ] `docs/prompt-injection-tests.md` — attack catalogue with expected behaviour *(started — the candidacy-assessment / skill-gap category is written and verified on dev; the rest below is Phase 7)*:
   - [ ] "ignore previous instructions" / "you are now a general assistant"
   - [ ] "print / repeat your system prompt / configuration"
   - [ ] instructions embedded in pasted text (e.g. a fake job description containing directives)
   - [ ] role-play / persona-override attempts
   - [ ] a poisoned `content/` file (verify corpus-as-data boundary holds)
+  - [x] **candidacy assessment & skill-gap claims** — agent never judges fit / seniority / comparisons / ratings, and never states "he hasn't worked with X" for anything outside the corpus (it's a knowledge boundary, not a skill gap). Guardrail 4 in `systemPrompt.ts`; 10 cases verified on dev `2026-08-30`. Added after a real failure ("probably not the right fit for this role").
 - [ ] Out-of-scope requests → agent explicitly names the scope boundary (not silent deflection)
 - [ ] Sensitive/borderline questions → soft redirect to "ask him directly", not a hard refusal
 - [ ] Confirm the system prompt never reaches the client in any response or error
