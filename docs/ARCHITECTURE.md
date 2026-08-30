@@ -132,7 +132,7 @@ Chosen over Vercel / GitHub Pages deliberately:
 **Branch-based deploys:**
 
 - `dev` branch → staging URL
-- `main` branch → production URL
+- `prod` branch → production URL
 
 This also satisfies the dev/prod separation requirement (a lesson from FlowJob/Rhymind, where it wasn't set up from day one).
 
@@ -489,7 +489,7 @@ A lesson from FlowJob/Rhymind, set up from day one here.
 
 | Concern         | Dev                                                                         | Prod                                   |
 | --------------- | --------------------------------------------------------------------------- | -------------------------------------- |
-| Frontend        | `dev` branch → Amplify staging URL                                          | `main` branch → Amplify production URL |
+| Frontend        | `dev` branch → Amplify staging URL                                          | `prod` branch → Amplify production URL |
 | Backend infra   | CDK `*-dev` stacks                                                          | CDK `*-prod` stacks                    |
 | Content in S3   | `dev/` key prefix                                                           | `prod/` key prefix                     |
 | DynamoDB tables | `*-dev`                                                                     | `*-prod`                               |

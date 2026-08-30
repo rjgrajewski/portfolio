@@ -24,7 +24,7 @@ sync on desktop and mobile).
 | **Not started** | Voice I/O (Phase 4), bilingual EN / PL (Phase 5), the prompt-injection test pass (Phase 7), the full visual / accessibility polish (Phase 9). |
 | **Longer-term goal** | Reusable, general-purpose portfolio asset for an ongoing job search. |
 
-URLs: **production** `https://main.daz9bpic9q3nd.amplifyapp.com` · **staging** `https://dev.daz9bpic9q3nd.amplifyapp.com`
+URLs: **production** `https://prod.daz9bpic9q3nd.amplifyapp.com` · **staging** `https://dev.daz9bpic9q3nd.amplifyapp.com`
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the phase-by-phase detail and [docs/DECISIONS.md](docs/DECISIONS.md) for the decision log.
 
@@ -61,7 +61,7 @@ Cognito are **Phase 4 (voice) and not built** — the rows below are marked.
 
 | Layer | Choice | State |
 |---|---|---|
-| Hosting | AWS Amplify Hosting — branch-based deploys (`dev` → staging, `main` → production) | live |
+| Hosting | AWS Amplify Hosting — branch-based deploys (`dev` → staging, `prod` → production) | live |
 | Region | `eu-central-1` (Frankfurt) | live |
 | Frontend | Vite + React + TypeScript (static SPA), Tailwind for styling | live |
 | Reasoning | Amazon Bedrock — Claude Haiku 4.5 (`eu.anthropic.claude-haiku-4-5-20251001-v1:0`, the EU inference profile), streamed over a **Lambda Function URL** (`InvokeMode: RESPONSE_STREAM`) | live |
@@ -137,7 +137,7 @@ npm run synth --workspace=backend/infra          # cdk synth, no AWS creds neede
 Frontend deploys are automatic — Amplify Hosting builds on push:
 
 - push to `dev` → `https://dev.daz9bpic9q3nd.amplifyapp.com` (staging)
-- push to `main` → `https://main.daz9bpic9q3nd.amplifyapp.com` (production)
+- push to `prod` → `https://prod.daz9bpic9q3nd.amplifyapp.com` (production)
 
 Backend deploys are manual so infra changes stay deliberate:
 

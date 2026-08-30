@@ -2,7 +2,7 @@ name: backend-ci
 
 on:
   push:
-    branches: [main, dev]
+    branches: [prod, dev]
   pull_request:
 
 jobs:
